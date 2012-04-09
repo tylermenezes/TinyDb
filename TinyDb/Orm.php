@@ -24,19 +24,16 @@ abstract class Orm
 
     /**
      * Creates an instance of the class.
-     * @param mixed     $lookup     If the paramater is null, the object will be uninitialized. Otherwise:
-     *
-     *                              If the paramater is an associative array, and a lookup will be performed
-     *                              on the database for (WHERE `key` = 'val' AND `key` = 'val' ...). The
-     *                              first result will be returned.
-     *
-     *                              If the paramater is a non-associative array, and the primary key is also
-     *                              an array, the paramater will be treated as values for the primary keys,
-     *                              and populated as specified above.
-     *
-     *                              If the paramater is not an array, or the table has a single primary key,
-     *                              the paramater will be cast as a string, and be used as a match for the
-     *                              primary key. The first result will populate the database.
+     * @param mixed     $lookup     * If the paramater is null, the object will be uninitialized. Otherwise:
+     *                              * If the paramater is an associative array, and a lookup will be performed
+     *                                on the database for (WHERE `key` = 'val' AND `key` = 'val' ...). The
+     *                                first result will be returned.
+     *                              * If the paramater is a non-associative array, and the primary key is also
+     *                                an array, the paramater will be treated as values for the primary keys,
+     *                                and populated as specified above.
+     *                              * If the paramater is not an array, or the table has a single primary key,
+     *                                the paramater will be cast as a string, and be used as a match for the
+     *                                primary key. The first result will populate the database.
      */
     public function __construct($lookup = NULL)
     {
@@ -88,7 +85,15 @@ abstract class Orm
             throw new \Exception($row->getMessage() . ', ' . $row->getDebugInfo());
         }
 
-        // Assign values
+        $this->data_fill($row);
+    }
+
+    /**
+     * Populates the object from row data
+     * @param  array  $row The row data
+     */
+    public function data_fill($row)
+    {
         foreach ($row as $field=>$value) {
             $this->$field = $this->fix_type($field, $value);
         }

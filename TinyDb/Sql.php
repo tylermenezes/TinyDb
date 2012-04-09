@@ -21,11 +21,20 @@ class Sql
     protected $limit = NULL;
     protected $start = NULL;
 
+    /**
+     * Factory-style creator so SQL commands can be created without using a variable
+     * @return Sql New SQL connection
+     */
     public static function create()
     {
         return new self();
     }
 
+    /**
+     * Creates a SELECT query
+     * @param  mixed  $what What to select from the database, or NULL to select *
+     * @return Sql          Current Sql statement
+     */
     public function select($what = NULL)
     {
         if (isset($what)) {
@@ -35,12 +44,23 @@ class Sql
         return $this;
     }
 
+    /**
+     * Sets what table to SELECT from
+     * @param  string $what Table name
+     * @return Sql          Current Sql statement
+     */
     public function from($what)
     {
         $this->from = $what;
         return $this;
     }
 
+    /**
+     * Adds a JOIN clause to the FROM
+     * @param  string $what Full JOIN clause, excluding "[(LEFT|RIGHT) ]JOIN "
+     * @param  string $type Type of JOIN, e.g. LEFT, RIGHT, INNER, OUTER
+     * @return sql          Current Sql statement
+     */
     public function join($what, $type = "LEFT")
     {
         $args = func_get_args();
@@ -59,6 +79,11 @@ class Sql
         return $this;
     }
 
+    /**
+     * Adds a WHERE clause
+     * @param  string $query The WHERE clause, excluding "WHERE "
+     * @return Sql           Current Sql statement
+     */
     public function where($query)
     {
         $args = func_get_args();
@@ -76,6 +101,11 @@ class Sql
         return $this;
     }
 
+    /**
+     * Adds a HAVING clause
+     * @param  string $query The HAVING clause, excluding "HAVING "
+     * @return Sql           Current Sql statement
+     */
     public function having($query)
     {
         $args = func_get_args();
@@ -93,6 +123,11 @@ class Sql
         return $this;
     }
 
+    /**
+     * Adds a GROUP BY clause
+     * @param  string $what Field to group by
+     * @return Sql          Current Sql statement
+     */
     public function group_by($what)
     {
         $this->group_bys[] = $what;
@@ -100,6 +135,12 @@ class Sql
         return $this;
     }
 
+
+    /**
+     * Adds an ORDER BY clause
+     * @param  string $what Field to order by
+     * @return Sql          Current Sql statement
+     */
     public function order_by($what)
     {
         $args = func_get_args();
@@ -117,6 +158,11 @@ class Sql
         return $this;
     }
 
+    /**
+     * Adds a UNION to the select
+     * @param  string $what Full SELECT clause to UNION
+     * @return Sql          Current Sql statement
+     */
     public function union($what)
     {
         $this->unions[] = $what;
@@ -124,6 +170,17 @@ class Sql
         return $this;
     }
 
+    /**
+     * Sets the LIMIT statement
+     * @param  mixed $param_1  * NULL to have no limit
+     *                         * If $param_2 is NULL, the limit
+     *                         * If $param_2 is not NULL, the starting point
+     *
+     * @param  mixed $param_2  * NULL if there is no limit and/or no starting point
+     *                         * Otherwise, the starting point.
+     *
+     * @return Sql             Current Sql statement
+     */
     public function limit($param_1 = NULL, $param_2 = NULL)
     {
         if (isset($param_2)) {
@@ -269,6 +326,10 @@ class Sql
         return $sql;
     }
 
+    /**
+     * Gets the ordered array of paramaters for replacing ?s in a prepared query.
+     * @return array    Ordered list of paramaters
+     */
     public function get_paramaters()
     {
         $args = array();

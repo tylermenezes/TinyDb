@@ -11,11 +11,20 @@ class Db
     protected static $read = NULL;
     protected static $write = NULL;
 
+
+    /**
+     * Gets a database connection for read commands
+     * @return \MDB2 MDB2 connection for reading from the database
+     */
     public static function get_read()
     {
         return isset(self::$read)? self::$read : self::get_write();
     }
 
+    /**
+     * Gets a database connection for write commands
+     * @return \MDB2 MDB2 connection for writing to the database
+     */
     public static function get_write()
     {
         if (!isset(self::$write)) {
@@ -25,6 +34,11 @@ class Db
         }
     }
 
+    /**
+     * Sets the database connection to use for TinyDb.
+     * @param \MDB2 $write MDB2 connection for writing to the database
+     * @param \MDB2 $read  Optional, read-only MDB2 connection to be used in read-only commands
+     */
     public static function set($write, $read = NULL) {
         if (is_string($write)) {
             $write = \MDB2::connect($write);
