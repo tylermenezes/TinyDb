@@ -83,6 +83,24 @@ Deleting Objects
 ----------------
 To delete an object just call the `delete()` function on it.
 
+Validations
+-----------
+TinyOrm supports validating your fields (and your properties, which we'll get to in a moment). You can define
+a validation by defining a function: `__validate_fieldName($val)` (where fieldName is the name of the field to
+validate, obviously.)
+
+TinyOrm even includes some built-in validations! To use them, use a string for `__validate_fieldName` instead of
+a function. The value should be one of the following:
+
+ * string/str
+ * integer/int
+ * email
+ * phone
+ * ssn
+ * date
+ * time
+ * datetime
+
 Magic Fields
 ------------
 TinyOrm supports a few magic fields:

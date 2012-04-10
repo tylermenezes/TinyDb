@@ -181,42 +181,6 @@ abstract class Orm
     }
 
     /**
-     * Magic PHP function for setting paramaters
-     * @param string $key Name of the paramater
-     * @param mixed  $val Value to set the paramater
-     */
-    public function __set($key, $val)
-    {
-        $this->check_deleted();
-        $setter_name = '__set_' . $key;
-
-        // Don't allow changes to pks or timestamps
-        if ($key === 'created_at' || $key === 'modified_at' ||
-            (is_array(static::$primary_key) &&in_array($key, static::$primary_key)) ||
-            (!is_array(static::$primary_key) && $key === static::$primary_key)) {
-
-            throw new \Exception("Write access to paramater $key is not allowed.");
-        }
-
-        // If there's a defined setter, call it
-        else if (static::$reflector->hasMethod($setter_name)) {
-            $this->$setter_name($key, $val);
-        }
-
-        // If we're trying to set a field in the table, allow it, and autotypecast
-        else if (isset(static::$table_layout[$key])) {
-            $this->$key = $this->fix_type($key, $val);
-
-            $this->invalidate($key);
-        }
-
-        // Otherwise, don't let the user set the param
-        else {
-            throw new \Exception("Write access to paramater $key is not allowed.");
-        }
-    }
-
-    /**
      * Magic PHP function for getting paramaters
      * @param  string $key Name of the paramater
      * @return mixed       Value of the paramater
@@ -243,6 +207,100 @@ abstract class Orm
     }
 
     /**
+     * Magic PHP function for setting paramaters
+     * @param string $key Name of the paramater
+     * @param mixed  $val Value to set the paramater
+     */
+    public function __set($key, $val)
+    {
+        $this->check_deleted();
+
+        if (!$this->__validate($key, $val)) {
+            throw new \Exception('Paramater did not pass validation.');
+        }
+
+        $setter_name = '__set_' . $key;
+
+        // Don't allow changes to pks or timestamps
+        if ($key === 'created_at' || $key === 'modified_at' ||
+            (is_array(static::$primary_key) &&in_array($key, static::$primary_key)) ||
+            (!is_array(static::$primary_key) && $key === static::$primary_key)) {
+
+            throw new \Exception("Write access to paramater $key is not allowed.");
+        }
+
+        // If there's a defined setter, call it
+        else if (static::$reflector->hasMethod($setter_name)) {
+            $this->$setter_name($key, $val);
+        }
+
+        // If we're trying to set a field in the table, allow it, and autotypecast
+        else if (isset(static::$table_layout[$key])) {
+            $this->$key = $val;
+
+            $this->invalidate($key);
+        }
+
+        // Otherwise, don't let the user set the param
+        else {
+            throw new \Exception("Write access to paramater $key is not allowed.");
+        }
+    }
+
+    /**
+     * Attempts to validate the given key
+     * @param  string $key Key to validate on
+     * @param  mixed  $val Value to check
+     * @return bool        TRUE if the value passes all checks, otherwise FALSE
+     */
+    protected function __validate($key, $val)
+    {
+        $validator_name = '__validate_' . $key;
+        // If there's a defined validation method, call it
+        if (static::$reflector->hasMethod($validator_name)) {
+            return $this->$validator_name($val);
+        }
+
+        // If there's a defined validation string, validate for that type
+        else if (static::$reflector->hasProperty($validator_name)) {
+            switch($this->$validator_name)
+            {
+                case 'string':
+                case 'str':
+                    return is_string($val);
+                case 'integer':
+                case 'int':
+                    return is_int($val);
+                case 'email':
+                    return preg_match("\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*", $val);
+                case 'phone':
+                    return preg_match("1?\s*\W?\s*([2-9][0-8][0-9])\s*\W?\s*([2-9][0-9]{2})\s*\W?\s*([0-9]{4})(\se?x?t?(\d*))?", $val);
+                case 'ssn':
+                    return preg_match("^(\d{3}-?\d{2}-?\d{4}|XXX-XX-XXXX)$", $val);
+                case 'date':
+                case 'time';
+                case 'datetime':
+                    return mktime($val) > 0;
+                default:
+                    return FALSE;
+            }
+        }
+
+        // If this is in the table structure, use that to validate
+        else if (static::$table_layout[$key]) {
+            // Try to cast it to its proper type using fixval, then check if it's typewise the same
+            try {
+                return fix_val($key, $val) === $key;
+            } catch(Exception $ex) {
+                return FALSE;
+            }
+        }
+
+        // No validation, so it's okay
+        return TRUE;
+    }
+
+    /**
      * Marks a field as needing an update in the database
      * @param  string $field The name of the field to invalidate
      */
@@ -265,6 +323,9 @@ abstract class Orm
         }
     }
 
+    /**
+     * Populates the structure of the model from the database into a late static binding
+     */
     protected static function populate_table_layout()
     {
         // Populate the table layout.
