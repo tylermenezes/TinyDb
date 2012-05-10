@@ -112,31 +112,24 @@ abstract class Orm
     {
         static::populate_table_layout();
 
-        $updates = array();
-        $created_at = time();
+        $sql = \TinyDb\Sql::create()->insert()->into(static::$table_name);
+        $created_at = \MDB2_Date::unix2Mdbstamp(time());
 
         foreach (static::$table_layout as $field=>$type) {
             // Check if this is a magic field; if so, don't allow updates
-            if ($field === 'created_at') {
-                $updates['created_at'] = \MDB2_Date::unix2Mdbstamp($created_at);
-            } else if ($field === 'modified_at') {
-                $updates['modified_at'] = \MDB2_Date::unix2Mdbstamp($created_at);
+            if ($field === 'created_at' || $field === 'modified_at') {
+                $sql->set("`$field` = ?", $created_at);
             } else if ($field == static::$primary_key) {
                 continue;
             }
 
-            // All fields should be set (even if they're only set to NULL)
-            else if (!isset($properties[$field])) {
-                throw new \Exception("$field must be set!");
-            }
-
-            // Add it to the list of updates
-            else {
-                $updates[$field] = $properties[$field];
+            // If there's a defined paramater, add it to the list of updates
+            else if (isset($properties[$field])) {
+                $sql->set("`$field` = ?", $properties[$field]);
             }
         }
 
-        $result = Db::get_write()->autoExecute(static::$table_name, $updates, MDB2_AUTOQUERY_INSERT);
+        $result = Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
         if (\PEAR::isError($result)) {
             throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
         }
@@ -151,20 +144,22 @@ abstract class Orm
     {
         $this->check_deleted();
 
+        $sql = \TinyDb\Sql::create()->update(static::$table_name);
+        $sql = $this->where_this($sql);
+
         // Build a list of updates to do
-        $updates = array();
         foreach ($this->needing_update as $field) {
-            $updates[$field] = $this->$field;
+            $sql->set("`$field` = ?", $this->$field);
         }
 
         // Update modified timestamp
         if (isset($this->modified_at)) {
             $this->modified_at = time();
-            $updates['modified_at'] = \MDB2_Date::unix2Mdbstamp($this->modified_at);
+            $sql->set('`modified_at` = ?', \MDB2_Date::unix2Mdbstamp($this->modified_at));
         }
 
         // Update the database
-        $result = Db::get_write()->autoExecute(static::$table_name, $updates, MDB2_AUTOQUERY_UPDATE, static::$primary_key . ' = ' . Db::get_write()->quote($this->{static::$primary_key}));
+        $result = Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
         if (\PEAR::isError($result)) {
             throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
         }
@@ -180,9 +175,32 @@ abstract class Orm
     {
         $this->check_deleted();
 
-        $sql = 'DELETE FROM `' . static::$table_name . '` WHERE `' . static::$primary_key . '` = ?';
-        Db::get_write()->prepare($sql)->execute(array($this->{static::$primary_key}));
+        $sql = \TinyDb\Sql::create()->delete()->from(static::$table_name);
+        $sql = $this->where_this($sql);
+
+        Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
+        if (\PEAR::isError($result)) {
+            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
+        }
         $this->is_deleted = TRUE;
+    }
+
+    /**
+     * Appends a where statement to a Sql query to select the current object by primary key
+     * @param  Sql $sql Sql query to add selector
+     * @return Sql      Sql query with selector
+     */
+    protected function where_this($sql)
+    {
+        if (is_array(static::$primary_key)) {
+            foreach (static::$primary_key as $key) {
+                $sql->where("`$key` = ?", $this->$key);
+            }
+        } else {
+            $sql->where('`' . static::$primary_key . '` = ?', $this->{static::$primary_key});
+        }
+
+        return $sql;
     }
 
     /**
