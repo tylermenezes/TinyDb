@@ -271,6 +271,9 @@ abstract class Orm
                 case 'integer':
                 case 'int':
                     return is_int($val);
+                case 'boolean':
+                case 'bool':
+                    return is_bool($val);
                 case 'email':
                     return preg_match("\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*", $val);
                 case 'phone':
@@ -357,6 +360,8 @@ abstract class Orm
                 return strval($val);
             } else if(substr($type, 0, 8) === 'datetime') {
                 return \MDB2_Date::mdbstamp2Unix($val);
+            } else if(substr($type, 0, 7) === 'tinyint') {
+                return ($val == TRUE);
             } else {
                return $val;
             }

@@ -94,6 +94,7 @@ a function. The value should be one of the following:
 
  * string/str
  * integer/int
+ * boolean/bool
  * email
  * phone
  * ssn
