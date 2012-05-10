@@ -37,6 +37,11 @@ abstract class Orm
      */
     public function __construct($lookup = NULL)
     {
+        // If the paramaters are passed in ... style, make them into an array
+        if (count(func_get_args())) {
+            $lookup = func_get_args();
+        }
+
         if (!isset(static::$table_name) || !isset(static::$primary_key)) {
             throw new \Exception('Classes using TinyDbOrm must have both a primary key and table name set.');
         }
@@ -380,5 +385,10 @@ abstract class Orm
     private function is_assoc_array($arr)
     {
         return is_array($arr) && (array_keys($arr) !== range(0, count($arr) - 1));
+    }
+
+    public function __toString()
+    {
+        return strval($this->{static::$primary_key});
     }
 }
