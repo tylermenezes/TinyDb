@@ -1,22 +1,23 @@
 TinyDb
 ======
-A minimalist set of tools for creating database-driven applications
+A minimalist set of tools for creating database-driven PHP applications.
 
 Introduction
 ------------
-TinyDb was created out of a frustration for an easy way to write database-driven apps in PHP. It seemed
-like 90% of the code I was writing was just grabbing some data from a database and populating a model.
-Frameworks like FuelPHP or CodeIgniter promised a better way of doing it, but the ORM system required
-lengthy configuration. Their database access class was fantastic, but also tied up in a large framework
-with a lot of overhead.
-
-TinyDb does very little in a very simple manner. It doesn't do everything you could want (foreign key
-relationships, for example, are deliberately omitted), but it provides a simple and clean interface for
-adding these features to your models. It provides a simple method for generating SQL queries, and for
-fetching sets of models from the database.
+> TinyDb was created out of a frustration for an easy way to write database-driven apps in PHP. It seemed
+> like 90% of the code I was writing was just grabbing some data from a database and populating a model.
+> Frameworks like FuelPHP or CodeIgniter promised a better way of doing it, but the ORM system required
+> lengthy configuration. Their database access class was fantastic, but also tied up in a large framework
+> with a lot of overhead.
+>
+> TinyDb does very little in a very simple manner. It doesn't do everything you could want (foreign key
+> relationships, for example, are deliberately omitted), but it provides a simple and clean interface for
+> adding these features to your models. It provides a simple method for generating SQL queries, and for
+> fetching sets of models from the database.
 
 Requirements
 ------------
+ * PHP &ge; 5.3.5
  * MDB2
 
 Connecting
@@ -42,7 +43,7 @@ with PHP functions. The easiest way to explain is to show you:
     \TinyDb\Sql::create()->select('*')->from('users')->join('`cats` USING (`catID`)', 'LEFT')->limit(5, 15);
 
     // INSERTing...
-    \TinyDb\Sql::create()->insert()->into('cats', array('breedID', 'color'))->values(12, 'blue');
+    \TinyDb\Sql::create()->insert()->into('cats', ['breedID', 'color'])->values(12, 'blue');
     \TinyDb\Sql::create()->insert()->into('users')->set('breedID = ?', 12)->set('color = ?', 'blue');
 
     // UPDATEing...
@@ -65,7 +66,7 @@ ORM-enabled classes are created by extending from `\TinyDb\Orm`. All TinyOrm cla
 static fields:
 
  * `table_name` - the name of the table
- * `primary_key` - the primary key of the table (either a string, or an array)
+ * `primary_key` - the primary key of the table (either a string, or an array if it's a composite key)
 
 The remainder of the ORM is handled by creating protected instance variables with the names of database
 fields. The type of the field will be automatically inferred from the database structure. Remember,
@@ -75,8 +76,19 @@ TinyOrm's magic PHP getters and setters.
 Creating Objects
 ----------------
 To create an object, just call the static function `create()` on that object's type. It takes an
-associative array of keys and values which correspond to fields in the database. All the fields need to
-be set, even if that means setting them to NULL.
+associative array of keys and values which correspond to fields in the database and returns the
+created object. You'll probably want to override it in your models for simplicity, i.e.:
+
+    public static function create($name, $breed, $color)
+    {
+        return parent::create([
+            'name' => $name,
+            'breedID' => $breed->breedID,
+            'color' => $color
+        ]);
+    }
+
+(If you do override it, make sure to __return__ the result of `parent::create`!)
 
 Loading Objects
 ---------------
@@ -92,9 +104,13 @@ Updating Objects
 Whenever you've made some updates to an object and want to commit them to the database, call the `update()`
 function and TinyOrm will take care of it.
 
+Optionally, don't call `update()` and TinyOrm will update it for you in its destructor. This generally makes
+tracking down update bugs more difficult, however, so it's not suggested.
+
 Deleting Objects
 ----------------
-To delete an object just call the `delete()` function on it.
+To delete an object just call the `delete()` function on it. (The object will prevent you from accessing
+anything after it's deleted, however any copies you might have won't, so be careful.)
 
 Validations
 -----------
@@ -152,7 +168,7 @@ The database collects this relationship with the field `userID`. We can create a
     }
 
 That's it - now we can call, for example, `$blogpost->user->username` and it works exactly as you'd expect.
-Note that if we hadn't defined a __set_user method, attempts to change the user would fail.
+Note that if we hadn't defined a `__set_user()` method, attempts to change the user would fail.
 
 Collections
 ===========

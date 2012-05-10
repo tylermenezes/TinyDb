@@ -142,7 +142,7 @@ class Sql
         $args = func_get_args();
         array_shift($args);
 
-        if (substr_count($query, '?') !== count($args)) {
+        if (substr_count($set, '?') !== count($args)) {
             throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
         }
 
@@ -399,7 +399,7 @@ class Sql
                 } else {
                     $sql .= "\n\t    ";
                 }
-                $sql .= '(' . $value['query'] . "), ";
+                $sql .= $value['query'] . ", ";
             }
             $sql = substr($sql, 0, strlen($sql) - 2);
             $sql .= "\n";

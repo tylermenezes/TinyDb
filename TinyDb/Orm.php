@@ -38,7 +38,7 @@ abstract class Orm
     public function __construct($lookup = NULL)
     {
         // If the paramaters are passed in ... style, make them into an array
-        if (count(func_get_args())) {
+        if (count(func_get_args()) > 1) {
             $lookup = func_get_args();
         }
 
@@ -70,13 +70,13 @@ abstract class Orm
         // If the lookup object and pkey are non-associative arrays of the same size:
         else if (is_array(static::$primary_key) && is_array($lookup) && size(static::$primary_key) === size($lookup)) {
             for ($i = 0; $i < size($lookup); $i++) {
-                $sql->where('`' . static::$primary_key[$i] . '` = ?', $lookup[$i]);
+                $sql->where('`' . static::$primary_key[$i] . '` = ?', $this->fix_type(static::$primary_key[$i], $lookup[$i]));
             }
         }
 
         // Cast the lookup object to a string.
         else {
-            $sql->where('`' . static::$primary_key . '` = ?', strval($lookup));
+            $sql->where('`' . static::$primary_key . '` = ?', $this->fix_type(static::$primary_key, $lookup));
         }
 
         // Do the lookup.
@@ -86,9 +86,7 @@ abstract class Orm
         if (!isset($row)) {
             throw new \Exception('Record not found.');
         }
-        if (\PEAR::isError($row)) {
-            throw new \Exception($row->getMessage() . ', ' . $row->getDebugInfo());
-        }
+        self::check_mdb2_error($row);
 
         $this->data_fill($row);
     }
@@ -129,12 +127,18 @@ abstract class Orm
             }
         }
 
-        $result = Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
-        if (\PEAR::isError($result)) {
-            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
+        $result = Db::get_write()->prepare($sql->get_sql());
+        self::check_mdb2_error($result);
+        $result = $result->execute($sql->get_paramaters());
+        self::check_mdb2_error($result);
+
+        $id = Db::get_write()->lastInsertID();
+
+        if (!isset($id)) {
+            throw new \Exception("Error in creating row.");
         }
 
-        return new static(Db::get_write()->lastInsertID());
+        return new static($id);
     }
 
     /**
@@ -143,6 +147,10 @@ abstract class Orm
     public function update()
     {
         $this->check_deleted();
+
+        if (count($this->needing_update) === 0) {
+            return; // No updates to do
+        }
 
         $sql = \TinyDb\Sql::create()->update(static::$table_name);
         $sql = $this->where_this($sql);
@@ -159,10 +167,10 @@ abstract class Orm
         }
 
         // Update the database
-        $result = Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
-        if (\PEAR::isError($result)) {
-            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
-        }
+        $result = Db::get_write()->prepare($sql->get_sql());
+        self::check_mdb2_error($result);
+        $result = $result->execute($sql->get_paramaters());
+        self::check_mdb2_error($result);
 
         // Clear the list of updates to make
         $this->needing_update = array();
@@ -179,9 +187,6 @@ abstract class Orm
         $sql = $this->where_this($sql);
 
         Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
-        if (\PEAR::isError($result)) {
-            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
-        }
         $this->is_deleted = TRUE;
     }
 
@@ -316,7 +321,7 @@ abstract class Orm
         else if (static::$table_layout[$key]) {
             // Try to cast it to its proper type using fixval, then check if it's typewise the same
             try {
-                return fix_val($key, $val) === $key;
+                return $this->fix_type($key, $val) === $val;
             } catch(Exception $ex) {
                 return FALSE;
             }
@@ -345,7 +350,7 @@ abstract class Orm
     {
         if ($this->is_deleted)
         {
-            throw new Exception('Cannot access a deleted object');
+            throw new \Exception('Cannot access a deleted object');
         }
     }
 
@@ -393,6 +398,13 @@ abstract class Orm
         }
     }
 
+    private static function check_mdb2_error($result)
+    {
+        if (\PEAR::isError($result)) {
+            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
+        }
+    }
+
     /**
      * Checks if an object is an associative array.
      *
@@ -408,5 +420,10 @@ abstract class Orm
     public function __toString()
     {
         return strval($this->{static::$primary_key});
+    }
+
+    public function __destruct()
+    {
+        $this->update();
     }
 }
