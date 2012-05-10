@@ -10,8 +10,20 @@ namespace TinyDb;
  */
 class Sql
 {
-    protected $selects = array();
+    protected $select = FALSE;
+    protected $insert = FALSE;
+    protected $delete = FALSE;
+
     protected $from = NULL;
+    protected $into = NULL;
+    protected $update = NULL;
+
+    protected $selects = array();
+
+    protected $cols = array();
+    protected $vals = array();
+
+    protected $sets = array();
     protected $joins = array();
     protected $wheres = array();
     protected $havings = array();
@@ -37,10 +49,43 @@ class Sql
      */
     public function select($what = NULL)
     {
+        $this->select = TRUE;
+
         if (isset($what)) {
             $this->selects[] = $what;
         }
 
+        return $this;
+    }
+
+    /**
+     * Creates an INSERT statement
+     * @return Sql Current Sql statement
+     */
+    public function insert()
+    {
+        $this->insert = TRUE;
+        return $this;
+    }
+
+    /**
+     * Sets what table to UPDATE
+     * @param  string $what Table name to update
+     * @return Sql          Current Sql statement
+     */
+    public function update($what)
+    {
+        $this->update = $what;
+        return $this;
+    }
+
+    /**
+     * Creates a DELETE statement
+     * @return Sql Current Sql statement
+     */
+    public function delete()
+    {
+        $this->delete = TRUE;
         return $this;
     }
 
@@ -52,6 +97,60 @@ class Sql
     public function from($what)
     {
         $this->from = $what;
+        return $this;
+    }
+
+    /**
+     * Sets what table to INSERT into
+     * @param  string $what Table name
+     * @param  Array  $cols Optional, field names to insert into
+     * @return Sql          Current Sql statement
+     */
+    public function into($what, $cols = NULL)
+    {
+        $this->into = $what;
+
+        if (isset($cols)) {
+            $this->cols = $cols;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Sets the values to insert or update (if not using set())
+     * @param  mixed  $vals Values to insert or update, or param-wise values
+     * @return Sql          Current Sql statement
+     */
+    public function values($vals)
+    {
+        if (count(func_get_args()) > 1) {
+            $vals = func_get_args();
+        }
+        $this->vals = $vals;
+
+        return $this;
+    }
+
+    /**
+     * Adds a SET statement
+     * @param  string $set The SET clause, excluding "SET "
+     * @return Sql         Current Sql statement
+     */
+    public function set($set)
+    {
+        $args = func_get_args();
+        array_shift($args);
+
+        if (substr_count($query, '?') !== count($args)) {
+            throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
+        }
+
+        $this->sets[] = array(
+            'query' => $set,
+            'params' => $args
+        );
+
         return $this;
     }
 
@@ -197,42 +296,121 @@ class Sql
         return $this;
     }
 
-    /**
-     * Generates a SQL query.
-     * @return string Generated SQL query
-     */
-    public function get_sql()
+    protected function get_select()
     {
-        // Preflight checks
-        if (!isset($this->from)) {
-            throw new \Exception("Cannot generate a query without a table.");
+        $sql = "";
+        if ($this->select) {
+            $sql .= 'SELECT';
+            if (count($this->selects) === 0) {
+                $sql .= ' `' . $this->from . '`.*';
+            } else {
+                foreach ($this->selects as $select) {
+                    $sql .= ' ' . $select . ',';
+                }
+                $sql = substr($sql, 0, strlen($sql) - 1);
+            }
+            $sql .= "\n";
         }
 
-        // Add SELECT
-        $sql = 'SELECT';
-        if (count($this->selects) === 0) {
-            $sql .= ' `' . $this->from . '`.*';
+        return $sql;
+    }
+
+    protected function get_from()
+    {
+        if (isset($this->from)) {
+            return "\tFROM `" . $this->from . "`\n";
         } else {
-            foreach ($this->selects as $select) {
-                $sql .= ' ' . $select . ',';
-            }
-            $sql = substr($sql, 0, strlen($sql) - 1);
+            return "";
         }
-        $sql .= "\n";
+    }
 
-        // Add FROM
-        $sql .= "\t" . 'FROM `' . $this->from . '`' . "\n";
-
-        // Add JOIN
-        if (count($this->joins) > 0) {
-            foreach ($this->joins as $join) {
-                $sql .= "\t" .  $join['type'] . ' JOIN ' . $join['what'] . "\n";
-            }
+    protected function get_insert()
+    {
+        $sql = "";
+        if ($this->insert) {
+            $sql .= "INSERT\n";
         }
 
-        $sql .= "\n";
+        return $sql;
+    }
 
-        // Add WHERE
+    protected function get_into()
+    {
+        $sql = "";
+        if (isset($this->into)) {
+            $sql .= "\tINTO `" . $this->into . "`";
+            if (count($this->cols) > 0) {
+                $sql .= "(";
+                foreach ($this->cols as $col) {
+                    $sql .= "`$col`, ";
+                }
+                $sql = substr($sql, 0, strlen($sql) - 2);
+                $sql .= ")";
+            }
+            $sql .= "\n";
+        }
+
+        return $sql;
+    }
+
+    protected function get_update()
+    {
+        $sql = "";
+        if (isset($this->update)) {
+            $sql .= 'UPDATE `' . $this->update . "`\n";
+        }
+        return $sql;
+    }
+
+    protected function get_delete()
+    {
+        $sql = "";
+        if ($this->delete) {
+            $sql .= "DELETE\n";
+        }
+
+        return $sql;
+    }
+
+    protected function get_values()
+    {
+        $sql = "";
+        if (count($this->vals) > 0) {
+            $sql .= "\tVALUES (";
+            foreach ($this->vals as $val) {
+                $sql .= $val . ', ';
+            }
+            $sql = substr($sql, 0, strlen($sql) - 2);
+            $sql .= ")\n";
+        }
+
+        return $sql;
+    }
+
+    protected function get_set()
+    {
+        $sql = "";
+        if (count($this->sets) > 0) {
+            $first = TRUE;
+            foreach ($this->sets as $field=>$value) {
+                if ($first) {
+                    $sql .= "\tSET ";
+                    $first = FALSE;
+                } else {
+                    $sql .= "\n\t    ";
+                }
+                $sql .= '(' . $value['query'] . "), ";
+            }
+            $sql = substr($sql, 0, strlen($sql) - 2);
+            $sql .= "\n";
+        }
+
+        return $sql;
+    }
+
+    protected function get_where()
+    {
+        $sql = "";
         if (count($this->wheres) > 0) {
             $first = TRUE;
             foreach ($this->wheres as $where) {
@@ -241,16 +419,32 @@ class Sql
                     $sql .= 'WHERE';
                     $first = FALSE;
                 } else {
-                    $sql .= 'AND';
+                    $sql .= '  AND';
                 }
                 $sql .= ' (';
                 $sql .= $where['query'];
                 $sql .= ')' . "\n";
             }
-            $sql .= "\n";
         }
 
-        // Add GROUP BY
+        return $sql;
+    }
+
+    protected function get_join()
+    {
+        $sql = "";
+        if (count($this->joins) > 0) {
+            foreach ($this->joins as $join) {
+                $sql .= "\t" .  $join['type'] . ' JOIN ' . $join['what'] . "\n";
+            }
+            $sql .= "\n";
+        }
+        return $sql;
+    }
+
+    protected function get_group_by()
+    {
+        $sql = "";
         if (count($this->group_bys) > 0) {
             $first = TRUE;
             $sql .= "\n\t";
@@ -267,8 +461,12 @@ class Sql
             }
             $sql .= "\n";
         }
+        return $sql;
+    }
 
-        // Add HAVING
+    protected function get_having()
+    {
+        $sql = "";
         if (count($this->havings) > 0) {
             $first = TRUE;
             $sql .= "\n";
@@ -286,8 +484,12 @@ class Sql
             }
             $sql .= "\n";
         }
+        return $sql;
+    }
 
-        // Add ORDER BY
+    protected function get_order_by()
+    {
+        $sql = "";
         if (count($this->order_bys) > 0) {
             $first = TRUE;
             $sql .= "\n\t";
@@ -304,23 +506,84 @@ class Sql
             }
             $sql .= "\n";
         }
+        return $sql;
+    }
 
-        // Add UNION
+    protected function get_union()
+    {
+        $sql = "";
         if (count($this->unions) > 0){
             foreach ($this->unions as $union) {
                 $sql .= "\n\t " . ' UNION ' . '(' . $union . ')';
             }
             $sql .= "\n";
         }
+        return $sql;
+    }
 
-        // Add LIMIT
-        $sql .= "\t";
+    protected function get_limit()
+    {
+        $sql = "";
         if (isset($this->start) && isset($this->limit)) {
-            $sql .= 'LIMIT ' . intval($this->start) . ',' . intval($this->limit);
+            $sql .= "\t" . 'LIMIT ' . intval($this->start) . ',' . intval($this->limit) . "\n";
         } else if (isset($this->limit)) {
-            $sql .= 'LIMIT ' . intval($this->limit);
+            $sql .= "\t" . 'LIMIT ' . intval($this->limit) . "\n";
         }
+        return $sql;
+    }
 
+    /**
+     * Generates a SQL query.
+     * @return string Generated SQL query
+     */
+    public function get_sql()
+    {
+        $sql = "";
+
+        // SELECT
+        $sql .= $this->get_select();
+
+        // INSERT
+        $sql .= $this->get_insert();
+        $sql .= $this->get_into();
+
+        // UPDATE
+        $sql .= $this->get_update();
+
+        // DELETE
+        $sql .= $this->get_delete();
+
+        // FROM
+        $sql .= $this->get_from();
+
+        // VALUES
+        $sql .= $this->get_values();
+
+        // SET
+        $sql .= $this->get_set();
+
+        // JOIN
+        $sql .= $this->get_join();
+
+        // WHERE
+        $sql .= $this->get_where();
+
+        // GROUP BY
+        $sql .= $this->get_group_by();
+
+        // HAVING
+        $sql .= $this->get_having();
+
+        // ORDER BY
+        $sql .= $this->get_order_by();
+
+        // UNION
+        $sql .= $this->get_union();
+
+        // LIMIT
+        $sql .= $this->get_limit();
+
+        $sql = substr($sql, 0, strlen($sql) - 1); // Strip off trailing \n.
         $sql .= ';';
 
         return $sql;
@@ -333,6 +596,10 @@ class Sql
     public function get_paramaters()
     {
         $args = array();
+
+        foreach ($this->sets as $set) {
+            $args = array_merge($args, $set['params']);
+        }
 
         foreach ($this->joins as $join) {
             $args = array_merge($args, $join['params']);

@@ -38,13 +38,26 @@ SQL
 TinyDb makes SQL easy. Just use the `\TinyDb\Sql` object to write queries like you normally would, except
 with PHP functions. The easiest way to explain is to show you:
 
-    \TinyDb\Sql::create()->select('*')->from('users')->join('`cats` USING (`catID`)', 'LEFT')->where('`created_at` < ?', time())->limit(1);
+    // SELECTing...
+    \TinyDb\Sql::create()->select('*')->from('users')->join('`cats` USING (`catID`)', 'LEFT')->limit(5, 15);
+
+    // INSERTing...
+    \TinyDb\Sql::create()->insert()->into('cats', array('breedID', 'color'))->values(12, 'blue');
+    \TinyDb\Sql::create()->insert()->into('users')->set('breedID = ?', 12)->set('color = ?', 'blue');
+
+    // UPDATEing...
+    \TinyDb\Sql::create()->update('users')->set('breedID = ?', 11)->where('catID = ?', 4)->limit(1);
+
+    // and even DELETEing!
+    \TinyDb\Sql::create()->delete()->from('users')->where('breedID = ?', 5);
 
 Other than a few minor differences (notice the format of `join()`), it's exactly what you'd expect. And every
 method returns the Sql object, so you can chain them together. (It's definitely mutable, though! Be careful
 to always clone an object if you don't want the main object changed).
 
-Notice those question marks? That's right, TinySql will automatically prepare your query for you, too!
+Notice those question marks? That's right, TinySql will automatically prepare your query for you, too! (One
+quick note about this: it's not possible to use the auto-prepare feature if you use VALUES() notation for
+inserts! I strongly recommend SET notation.)
 
 ORM
 ===
