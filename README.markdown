@@ -122,19 +122,19 @@ propertyName with the name of the property):
 This is quite useful for foreign keys. For example, imagine a blog post, which has an associated user.
 The database collects this relationship with the field `userID`. We can create a lazy-loaded user as such:
 
-    private $user = NULL;
+    private $_user = NULL;
     protected function __get_user()
     {
-        if (!isset($this->user)) {
-            $this->user = new Models\User($this->userID);
+        if (!isset($this->_user)) {
+            $this->_user = new Models\User($this->userID);
         }
 
-        return $this->user;
+        return $this->_user;
     }
 
     protected function __set_user(Models\User $val)
     {
-        $this->user = NULL;
+        $this->_user = NULL;
         $this->userID = $val->userID;
     }
 
