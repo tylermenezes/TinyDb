@@ -175,3 +175,25 @@ Collections
 Collections are just what they sound like: collections of things. TinyOrm classes, to be specific. Creating
 a collection is easy, just pass it the name of a Model which inherits from `\TinyDb\Orm` and a Sql query.
 The collection will be populated with all the models matching the query!
+
+Collections have several useful methods:
+
+`each($lambda)`
+---------------
+`each` performs an action on each model in the collection. It takes one paramater, a function to perform which
+itself takes one paramater - the model to perform the action on. The return values for `$lambda` are collected
+into an array, which this function returns.
+
+`find($lambda)`
+---------------
+`find` builds a subcollection of models matching a given query. It takes one paramater - again, a function which
+is executed on each model (passed to the callback as its first paramater). If that function returns `TRUE`, the
+model is included. Because it returns a `TinyDb\Collection`, you can chain calls off this.
+
+`find_one($lambda)`
+-------------------
+A shortcut for `find($lambda)[0]`. Returns an instance of `TinyDb\Orm`, or `NULL` if none is found.
+
+`contains($lambda)`
+-------------------
+A shortcut for `count(find($lambda)) > 0`. Returns `TRUE` if the collection contains at least one matching model, otherwise `FALSE`.

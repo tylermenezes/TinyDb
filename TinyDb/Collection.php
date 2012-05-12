@@ -20,18 +20,79 @@ class Collection implements \ArrayAccess, \Countable, \Iterator
      * @param string $classname The name of the Orm class the collection holds
      * @param Sql    $query     The query used to populate the collection
      */
-    public function __construct($classname, Sql $query)
+    public function __construct($classname, $query_or_model_array)
     {
         $this->model = $classname;
-        $this->query = $query;
 
-        $data = Db::get_read()->getAll($this->query->get_sql(), NULL, $this->query->get_paramaters(), NULL, MDB2_FETCHMODE_ASSOC);
+        if (is_array($query_or_model_array)) {
+            $this->data = $query_or_model_array;
+        } else {
+            $this->query = $query_or_model_array;
 
-        if (\PEAR::isError($data)) {
-            throw new \Exception($data->getMessage() . ', ' . $data->getDebugInfo());
+            $data = Db::get_read()->getAll($this->query->get_sql(), NULL, $this->query->get_paramaters(), NULL, MDB2_FETCHMODE_ASSOC);
+
+            if (\PEAR::isError($data)) {
+                throw new \Exception($data->getMessage() . ', ' . $data->getDebugInfo());
+            }
+
+            $this->data = $data;
+        }
+    }
+
+    /**
+     * Executes a function on each element of the collection.
+     * @param  callable  $lambda  A function taking one paramater - the model
+     * @return array              Array of responses
+     */
+    public function each($lambda)
+    {
+        $resp = array();
+        foreach ($this as $model) {
+            $resp[] = $lambda($model);
         }
 
-        $this->data = $data;
+        return $resp;
+    }
+
+    /**
+     * Finds all elements with a given filter function
+     * @param  callable  $lambda  A function taking one paramater - the model - which returns TRUE if it should be included
+     * @return Collection         Filtered collection
+     */
+    public function find($lambda)
+    {
+        $models = $this->each(function($model) use($lambda){
+            if ($lambda($model) === TRUE) {
+                return $model;
+            }
+        });
+
+        return new Collection($this->model, $models);
+    }
+
+    /**
+     * Gets the first model matching a given filter function
+     * @param  callable  $lambda  A function taking one paramater - the model - which returns TRUE if it should be included
+     * @return Model              First model matching the filter, or NULL
+     */
+    public function find_one($lambda)
+    {
+        $all = $this->find($lambda);
+        if (count($all) > 0) {
+            return $all[0];
+        } else {
+            return NULL;
+        }
+    }
+
+    /**
+     * Returns TRUE if any model matches the given filter function, false otherwise.
+     * @param  callable  $lambda  A function taking one paramater - the model - which returns TRUE if it matches
+     * @return boolean            TRUE if the collection contains at least one Model matching the query, FALSE otherwise
+     */
+    public function contains($lambda)
+    {
+        return count($this->find($lambda)) > 0;
     }
 
     /* Interface Implementations */
