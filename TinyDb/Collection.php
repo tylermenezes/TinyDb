@@ -86,6 +86,31 @@ class Collection implements \ArrayAccess, \Countable, \Iterator
     }
 
     /**
+     * Filters all elements not matching a  given filter function. (A mutable version of find).
+     * @param  callable  $lambda  A function taking one paramater - the model - which returns TRUE if it should be included
+     * @return Collection         Current collection
+     */
+    public function filter($lambda)
+    {
+        $this->data = $this->find($lambda)->data;
+        return $this;
+    }
+
+    /**
+     * Removes the given object from the collection
+     * @param  Model      $model_to_remove  Model to remove
+     * @return Collection                   Current collection
+     */
+    public function remove($model_to_remove)
+    {
+        $this->filter(function($model) use($model_to_remove){
+            return (!$model->equals($model_to_remove));
+        });
+
+        return $this;
+    }
+
+    /**
      * Returns TRUE if any model matches the given filter function, false otherwise.
      * @param  callable  $lambda  A function taking one paramater - the model - which returns TRUE if it matches
      * @return boolean            TRUE if the collection contains at least one Model matching the query, FALSE otherwise

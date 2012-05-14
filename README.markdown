@@ -176,6 +176,43 @@ Collections are just what they sound like: collections of things. TinyOrm classe
 a collection is easy, just pass it the name of a Model which inherits from `\TinyDb\Orm` and a Sql query.
 The collection will be populated with all the models matching the query!
 
+You'll find that it's often useful to extend a collection and add your own constructor and methods. For
+example:
+
+    class Permissions extends \TinyDb\Collection
+    {
+        protected $user = NULL;
+        public function __construct($user)
+        {
+            $this->user = $user;
+            parent::__construct('\StudentRnd\Models\AccessControl\Permission',
+                \TinyDb\Sql::create()
+                        ->select()
+                        ->from(AccessControl\Permission::$table_name)
+                        ->join('`users_permissions` USING (`permissionID`)')
+                        ->where('`userID` = ?', $user->userID));
+        }
+
+        public function has_permission($permission)
+        {
+            return $this->contains(function($model) use($permission) {
+                return $model->name === $permission;
+            });
+        }
+
+        public function grant_permission($permission)
+        {
+            $this->data[] = Mappings\UserPermission::create($this->user, $permission);
+        }
+
+        public function remove_permission($permission)
+        {
+            $mapping = new Mappings\UserPermission($this->user, $permission);
+            $this->remove($mapping);
+            $mapping->delete();
+        }
+    }
+
 Collections have several useful methods:
 
 `each($lambda)`
@@ -194,6 +231,16 @@ model is included. Because it returns a `TinyDb\Collection`, you can chain calls
 -------------------
 A shortcut for `find($lambda)[0]`. Returns an instance of `TinyDb\Orm`, or `NULL` if none is found.
 
+`filter($lambda)`
+-----------------
+The mutable version of `find($lambda)`. Updates and returns the current collection. You can chain calls off this.
+
+`remove($model)`
+----------------
+A shortcut for `find(function($m) use($model){return (!$model->equals($m));})`. Removes all instances of the model
+from the current collection.
+
 `contains($lambda)`
 -------------------
-A shortcut for `count(find($lambda)) > 0`. Returns `TRUE` if the collection contains at least one matching model, otherwise `FALSE`.
+A shortcut for `count(find($lambda)) > 0`. Returns `TRUE` if the collection contains at least one matching model,
+otherwise `FALSE`.

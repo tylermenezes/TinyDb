@@ -191,6 +191,32 @@ abstract class Orm
     }
 
     /**
+     * Checks if the passed instance is equal to the current instance by table and primary key.
+     * @param  Model   $to_compare  Model to check equality with
+     * @return boolean              Result
+     */
+    public function equals($to_compare)
+    {
+        if (static::$table_name != $to_compare::$table_name || static::$primary_key != $to_compare::$primary_key) {
+            return FALSE;
+        }
+
+        if (is_array(static::$primary_key)) {
+            foreach (static::$primary_key as $key) {
+                if ($this->$key != $to_compare->$key) {
+                    return FALSE;
+                }
+            }
+        } else {
+            if ($this->{static::$primary_key} != $to_compare->{$to_compare::$primary_key}) {
+                return FALSE;
+            }
+        }
+
+        return TRUE;
+    }
+
+    /**
      * Appends a where statement to a Sql query to select the current object by primary key
      * @param  Sql $sql Sql query to add selector
      * @return Sql      Sql query with selector
