@@ -363,6 +363,7 @@ abstract class Orm
         if (!isset(static::$table_layout)) {
             $sql = 'SHOW COLUMNS FROM `' . static::$table_name . '`;';
             $describe = Db::get_read()->getAll($sql, NULL, array(), NULL, MDB2_FETCHMODE_ASSOC);
+            self::check_mdb2_error($describe);
             static::$table_layout = array();
             foreach ($describe as $field) {
                 static::$table_layout[$field['Field']] = $field['Type'];
