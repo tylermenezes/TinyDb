@@ -116,8 +116,6 @@ abstract class Orm
             // Check if this is a magic field; if so, don't allow updates
             if ($field === 'created_at' || $field === 'modified_at') {
                 $sql->set("`$field` = ?", $created_at);
-            } else if ($field == static::$primary_key) {
-                continue;
             }
 
             // If there's a defined paramater, add it to the list of updates
@@ -131,7 +129,11 @@ abstract class Orm
         $result = $result->execute($sql->get_paramaters());
         self::check_mdb2_error($result);
 
-        $id = Db::get_write()->lastInsertID();
+        if (isset($properties[static::$primary_key])) {
+            $id = $properties[static::$primary_key];
+        } else {
+            $id = Db::get_write()->lastInsertID();
+        }
 
         if (!isset($id)) {
             throw new \Exception("Error in creating row.");
