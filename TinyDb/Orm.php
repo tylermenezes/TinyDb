@@ -13,8 +13,7 @@ abstract class Orm
     public static $table_name = NULL;
     public static $primary_key = NULL;
 
-    protected static $table_layout = NULL;
-    protected static $reflector = NULL;
+    protected static $instance = array();
 
     protected $needing_update = array();
     protected $is_deleted = FALSE;
@@ -49,8 +48,8 @@ abstract class Orm
         static::populate_table_layout();
 
         // Populate the reflector.
-        if (!isset(static::$reflector)) {
-            static::$reflector = new \ReflectionClass($this);
+        if (!isset(static::$instance[static::$table_name]['reflector'])) {
+            static::$instance[static::$table_name]['reflector'] = new \ReflectionClass($this);
         }
 
         $sql = Sql::create()->select()->from(static::$table_name)->limit(1);
@@ -61,7 +60,7 @@ abstract class Orm
         }
 
         // If the lookup object is an associative array:
-        else if (self::is_assoc_array($lookup)) {
+        else if (static::is_assoc_array($lookup)) {
             foreach ($lookup as $field=>$value) {
                 $sql->where('`' . $field . '` = ?', $value);
             }
@@ -113,7 +112,9 @@ abstract class Orm
         $sql = \TinyDb\Sql::create()->insert()->into(static::$table_name);
         $created_at = \MDB2_Date::unix2Mdbstamp(time());
 
-        foreach (static::$table_layout as $field=>$type) {
+        print_r(static::$instance[static::$table_name]['table_layout']);
+
+        foreach (static::$instance[static::$table_name]['table_layout'] as $field=>$type) {
             // Check if this is a magic field; if so, don't allow updates
             if ($field === 'created_at' || $field === 'modified_at') {
                 $sql->set("`$field` = ?", $created_at);
@@ -245,12 +246,12 @@ abstract class Orm
         $getter_name = '__get_' . $key;
 
         // If there's a defined getter, call it
-        if (static::$reflector->hasMethod($getter_name)) {
+        if (static::$instance[static::$table_name]['reflector']->hasMethod($getter_name)) {
             return $this->$getter_name();
         }
 
         // If we're trying to get a field in the table, allow it
-        else if (isset(static::$table_layout[$key])) {
+        else if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
             return $this->$key;
         }
 
@@ -284,12 +285,12 @@ abstract class Orm
         }
 
         // If there's a defined setter, call it
-        else if (static::$reflector->hasMethod($setter_name)) {
+        else if (static::$instance[static::$table_name]['reflector']->hasMethod($setter_name)) {
             $this->$setter_name($key, $val);
         }
 
         // If we're trying to set a field in the table, allow it, and autotypecast
-        else if (isset(static::$table_layout[$key])) {
+        else if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
             $this->$key = $val;
 
             $this->invalidate($key);
@@ -311,12 +312,12 @@ abstract class Orm
     {
         $validator_name = '__validate_' . $key;
         // If there's a defined validation method, call it
-        if (static::$reflector->hasMethod($validator_name)) {
+        if (static::$instance[static::$table_name]['reflector']->hasMethod($validator_name)) {
             return $this->$validator_name($val);
         }
 
         // If there's a defined validation string, validate for that type
-        else if (static::$reflector->hasProperty($validator_name)) {
+        else if (static::$instance[static::$table_name]['reflector']->hasProperty($validator_name)) {
             switch($this->$validator_name)
             {
                 case 'string':
@@ -344,7 +345,7 @@ abstract class Orm
         }
 
         // If this is in the table structure, use that to validate
-        else if (static::$table_layout[$key]) {
+        else if (static::$instance[static::$table_name]['table_layout'][$key]) {
             // Try to cast it to its proper type using fixval, then check if it's typewise the same
             try {
                 return $this->fix_type($key, $val) === $val;
@@ -386,17 +387,17 @@ abstract class Orm
     protected static function populate_table_layout()
     {
         // Populate the table layout.
-        if (!isset(static::$table_layout)) {
+        if (!isset(static::$instance[static::$table_name]['table_layout'])) {
             $sql = 'SHOW COLUMNS FROM `' . static::$table_name . '`;';
             $describe = Db::get_read()->getAll($sql, NULL, array(), NULL, MDB2_FETCHMODE_ASSOC);
             self::check_mdb2_error($describe);
-            static::$table_layout = array();
+            static::$instance[static::$table_name]['table_layout'] = array();
             foreach ($describe as $field) {
-                static::$table_layout[$field['Field']] = $field['Type'];
+                static::$instance[static::$table_name]['table_layout'][$field['Field']] = $field['Type'];
             }
         }
 
-        return static::$table_layout;
+        return static::$instance[static::$table_name]['table_layout'];
     }
 
     /**
@@ -406,8 +407,8 @@ abstract class Orm
      */
     protected function fix_type($key, $val)
     {
-        if (isset(static::$table_layout[$key])) {
-            $type = strtolower(self::$table_layout[$key]);
+        if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
+            $type = strtolower(static::$instance[static::$table_name]['table_layout'][$key]);
 
             if (substr($type, 0, 3) === 'int') {
                 return intval($val);
