@@ -112,8 +112,6 @@ abstract class Orm
         $sql = \TinyDb\Sql::create()->insert()->into(static::$table_name);
         $created_at = \MDB2_Date::unix2Mdbstamp(time());
 
-        print_r(static::$instance[static::$table_name]['table_layout']);
-
         foreach (static::$instance[static::$table_name]['table_layout'] as $field=>$type) {
             // Check if this is a magic field; if so, don't allow updates
             if ($field === 'created_at' || $field === 'modified_at') {
