@@ -83,11 +83,34 @@ abstract class Orm
 
         // Check if there are any errors.
         if (!isset($row)) {
-            return NULL;
+            throw new NoRecordException();
         }
         self::check_mdb2_error($row);
 
         $this->data_fill($row);
+    }
+
+    /**
+     * Checks if an instance of the class exists in the database.
+     * @param mixed     $lookup     * If the paramater is null, the object will be uninitialized. Otherwise:
+     *                              * If the paramater is an associative array, and a lookup will be performed
+     *                                on the database for (WHERE `key` = 'val' AND `key` = 'val' ...). The
+     *                                first result will be returned.
+     *                              * If the paramater is a non-associative array, and the primary key is also
+     *                                an array, the paramater will be treated as values for the primary keys,
+     *                                and populated as specified above.
+     *                              * If the paramater is not an array, or the table has a single primary key,
+     *                                the paramater will be cast as a string, and be used as a match for the
+     *                                primary key. The first result will populate the database.
+     */
+    public static function exists($lookup = NULL)
+    {
+        try {
+            new static($lookup);
+            return TRUE;
+        } catch (NoRecordException $ex) {
+            return FALSE;
+        }
     }
 
     /**
