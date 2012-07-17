@@ -83,7 +83,7 @@ abstract class Orm
 
         // Check if there are any errors.
         if (!isset($row)) {
-            throw new \Exception('Record not found.');
+            return NULL;
         }
         self::check_mdb2_error($row);
 
