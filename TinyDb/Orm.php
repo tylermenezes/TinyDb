@@ -294,7 +294,7 @@ abstract class Orm
         $this->check_deleted();
 
         if (!$this->__validate($key, $val)) {
-            throw new \Exception('Paramater did not pass validation.');
+            throw new \Exception("$key did not pass validation.");
         }
 
         $setter_name = '__set_' . $key;
@@ -309,7 +309,7 @@ abstract class Orm
 
         // If there's a defined setter, call it
         else if (static::$instance[static::$table_name]['reflector']->hasMethod($setter_name)) {
-            $this->$setter_name($key, $val);
+            $this->$setter_name($val);
         }
 
         // If we're trying to set a field in the table, allow it, and autotypecast

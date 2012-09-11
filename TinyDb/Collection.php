@@ -67,6 +67,8 @@ class Collection implements \ArrayAccess, \Countable, \Iterator
             }
         });
 
+        $models = array_merge(array(), array_filter($models));
+
         return new Collection($this->model, $models);
     }
 
@@ -124,7 +126,6 @@ class Collection implements \ArrayAccess, \Countable, \Iterator
     public function count()
     {
         return count($this->data);
-        $this->populate();
     }
 
     public function offsetExists($offset)
