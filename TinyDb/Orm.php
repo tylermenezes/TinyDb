@@ -152,8 +152,17 @@ abstract class Orm
         $result = $result->execute($sql->get_paramaters());
         self::check_mdb2_error($result);
 
-        if (isset($properties[static::$primary_key])) {
+        if (is_string(static::$primary_key) && isset($properties[static::$primary_key])) {
             $id = $properties[static::$primary_key];
+        } else if (is_array(static::$primary_key)) {
+            $id = array();
+            foreach (static::$primary_key as $key) {
+                if (isset($properties[$key])) {
+                    $id[$key] = $properties[$key];
+                } else {
+                    $id[$key] = Db::get_write()->lastInsertID();
+                }
+            }
         } else {
             $id = Db::get_write()->lastInsertID();
         }
@@ -170,11 +179,12 @@ abstract class Orm
      */
     public function update()
     {
-        $this->check_deleted();
-
         if (count($this->needing_update) === 0) {
             return; // No updates to do
         }
+
+        $this->check_deleted();
+
 
         $sql = \TinyDb\Sql::create()->update(static::$table_name);
         $sql = $this->where_this($sql);
@@ -368,7 +378,7 @@ abstract class Orm
         }
 
         // If this is in the table structure, use that to validate
-        else if (static::$instance[static::$table_name]['table_layout'][$key]) {
+        else if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
             // Try to cast it to its proper type using fixval, then check if it's typewise the same
             try {
                 return $this->fix_type($key, $val) === $val;
