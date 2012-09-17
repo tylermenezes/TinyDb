@@ -125,6 +125,27 @@ abstract class Orm
     }
 
     /**
+     * Gets an MDB-style timestamp in GMT
+     * @param  int    $unix_timestamp Unix timestamp
+     * @return string                 MDB timestamp
+     */
+    private static function mdb_timestamp($unix_timestamp)
+    {
+        return gmdate('Y-m-d H:i:s', $unix_timestamp);
+    }
+
+    /**
+     * Gets a UNIX-style timestamp in GMT
+     * @param  string $unix_timestamp MDB timestamp
+     * @return int                    Unix timestamp
+     */
+    private static function unmdb_timestamp($mdb_timestamp)
+    {
+        $arr = \MDB2_Date::mdbstamp2Date($mdb_timestamp);
+        return gmmktime($arr['hour'], $arr['minute'], $arr['second'], $arr['month'], $arr['day'], $arr['year'], -1);
+    }
+
+    /**
      * Creates an object in the database
      * @param array     $properties     Associative array of fields to insert into the database
      */
@@ -133,7 +154,7 @@ abstract class Orm
         static::populate_table_layout();
 
         $sql = \TinyDb\Sql::create()->insert()->into(static::$table_name);
-        $created_at = \MDB2_Date::unix2Mdbstamp(time());
+        $created_at = self::mdb_timestamp(time());
 
         foreach (static::$instance[static::$table_name]['table_layout'] as $field=>$type) {
             // Check if this is a magic field; if so, don't allow updates
@@ -197,7 +218,7 @@ abstract class Orm
         // Update modified timestamp
         if (isset($this->modified_at)) {
             $this->modified_at = time();
-            $sql->set('`modified_at` = ?', \MDB2_Date::unix2Mdbstamp($this->modified_at));
+            $sql->set('`modified_at` = ?', self::mdb_timestamp($this->modified_at));
         }
 
         // Update the database
@@ -447,8 +468,8 @@ abstract class Orm
                 return intval($val);
             } else if(substr($type, 0, 7) === 'varchar' || substr($type, 0, 4) == 'text') {
                 return strval($val);
-            } else if(substr($type, 0, 8) === 'datetime') {
-                return \MDB2_Date::mdbstamp2Unix($val);
+            } else if(substr($type, 0, 8) === 'datetime' || substr($type, 0, 4) === 'date' || substr($type, 0, 4) === 'time') {
+                return self::unmdb_timestamp($val);
             } else if(substr($type, 0, 7) === 'tinyint') {
                 return ($val == TRUE);
             } else {
