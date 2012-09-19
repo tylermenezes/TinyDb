@@ -69,13 +69,13 @@ abstract class Orm
         // If the lookup object and pkey are non-associative arrays of the same size:
         else if (is_array(static::$primary_key) && is_array($lookup) && size(static::$primary_key) === size($lookup)) {
             for ($i = 0; $i < size($lookup); $i++) {
-                $sql->where('`' . static::$primary_key[$i] . '` = ?', $this->fix_type(static::$primary_key[$i], $lookup[$i]));
+                $sql->where('`' . static::$primary_key[$i] . '` = ?', static::unfix_type(static::$primary_key[$i], $lookup[$i]));
             }
         }
 
         // Cast the lookup object to a string.
         else {
-            $sql->where('`' . static::$primary_key . '` = ?', $this->fix_type(static::$primary_key, $lookup));
+            $sql->where('`' . static::$primary_key . '` = ?', static::unfix_type(static::$primary_key, $lookup));
         }
 
         // Do the lookup.
@@ -131,6 +131,10 @@ abstract class Orm
      */
     private static function mdb_timestamp($unix_timestamp)
     {
+        if (!is_int($unix_timestamp)) {
+            return FALSE;
+        }
+
         return gmdate('Y-m-d H:i:s', $unix_timestamp);
     }
 
@@ -141,6 +145,10 @@ abstract class Orm
      */
     private static function unmdb_timestamp($mdb_timestamp)
     {
+        if (is_int($mdb_timestamp)) {
+            return $mdb_timestamp;
+        }
+
         $arr = \MDB2_Date::mdbstamp2Date($mdb_timestamp);
         return gmmktime($arr['hour'], $arr['minute'], $arr['second'], $arr['month'], $arr['day'], $arr['year'], -1);
     }
@@ -164,7 +172,7 @@ abstract class Orm
 
             // If there's a defined paramater, add it to the list of updates
             else if (isset($properties[$field])) {
-                $sql->set("`$field` = ?", $properties[$field]);
+                $sql->set("`$field` = ?", static::unfix_type($field, $properties[$field]));
             }
         }
 
@@ -212,7 +220,7 @@ abstract class Orm
 
         // Build a list of updates to do
         foreach ($this->needing_update as $field) {
-            $sql->set("`$field` = ?", $this->$field);
+            $sql->set("`$field` = ?", static::unfix_type($field, $this->$field));
         }
 
         // Update modified timestamp
@@ -402,7 +410,7 @@ abstract class Orm
         else if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
             // Try to cast it to its proper type using fixval, then check if it's typewise the same
             try {
-                return $this->fix_type($key, $val) === $val;
+                return static::fix_type($key, $val) === $val;
             } catch(Exception $ex) {
                 return FALSE;
             }
@@ -459,7 +467,7 @@ abstract class Orm
      * @param string $key Name of the paramater
      * @param mixed  $val Value to autocast
      */
-    protected function fix_type($key, $val)
+    protected static function fix_type($key, $val)
     {
         if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
             $type = strtolower(static::$instance[static::$table_name]['table_layout'][$key]);
@@ -472,6 +480,26 @@ abstract class Orm
                 return self::unmdb_timestamp($val);
             } else if(substr($type, 0, 7) === 'tinyint') {
                 return ($val == TRUE);
+            } else {
+               return $val;
+            }
+        } else {
+            return $val;
+        }
+    }
+
+    /**
+     * Auto-casts the value back into the proper type for its field for the db
+     * @param string $key Name of the paramater
+     * @param mixed  $val Value to autocast
+     */
+    protected static function unfix_type($key, $val)
+    {
+        if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
+            $type = strtolower(static::$instance[static::$table_name]['table_layout'][$key]);
+
+            if(substr($type, 0, 8) === 'datetime' || substr($type, 0, 4) === 'date' || substr($type, 0, 4) === 'time') {
+                return self::mdb_timestamp($val);
             } else {
                return $val;
             }
