@@ -13,7 +13,7 @@ abstract class Orm
     public static $table_name = NULL;
     public static $primary_key = NULL;
 
-    protected static $instance = array();
+    public static $instance = array();
 
     protected $needing_update = array();
     protected $is_deleted = FALSE;
@@ -159,12 +159,21 @@ abstract class Orm
      */
     public static function create(Array $properties)
     {
+        return static::raw_create($properties);
+    }
+
+    /**
+     * Creates an object in the database
+     * @param array     $properties     Associative array of fields to insert into the database
+     */
+    public static final function raw_create(Array $properties)
+    {
         static::populate_table_layout();
 
         $sql = \TinyDb\Sql::create()->insert()->into(static::$table_name);
         $created_at = self::mdb_timestamp(time());
 
-        foreach (static::$instance[static::$table_name]['table_layout'] as $field=>$type) {
+        foreach (static::$instance[static::$table_name]['table_layout'] as $field=>$details) {
             // Check if this is a magic field; if so, don't allow updates
             if ($field === 'created_at' || $field === 'modified_at') {
                 $sql->set("`$field` = ?", $created_at);
@@ -319,7 +328,7 @@ abstract class Orm
 
         // Otherwise, don't let the user get the param
         else {
-            throw new \Exception("Read access to paramater $key is not allowed.");
+            throw new \TinyDb\AccessException("Read access to paramater $key is not allowed.");
         }
     }
 
@@ -333,7 +342,7 @@ abstract class Orm
         $this->check_deleted();
 
         if (!$this->__validate($key, $val)) {
-            throw new \Exception("$key did not pass validation.");
+            throw new \TinyDb\ValidationException("$key did not pass validation.");
         }
 
         $setter_name = '__set_' . $key;
@@ -343,7 +352,7 @@ abstract class Orm
             (is_array(static::$primary_key) &&in_array($key, static::$primary_key)) ||
             (!is_array(static::$primary_key) && $key === static::$primary_key)) {
 
-            throw new \Exception("Write access to paramater $key is not allowed.");
+            throw new \TinyDb\AccessException("Write access to paramater $key is not allowed.");
         }
 
         // If there's a defined setter, call it
@@ -360,7 +369,7 @@ abstract class Orm
 
         // Otherwise, don't let the user set the param
         else {
-            throw new \Exception("Write access to paramater $key is not allowed.");
+            throw new \AccessException("Write access to paramater $key is not allowed.");
         }
     }
 
@@ -410,7 +419,7 @@ abstract class Orm
         else if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
             // Try to cast it to its proper type using fixval, then check if it's typewise the same
             try {
-                return static::fix_type($key, $val) === $val;
+                return static::fix_type($key, $val) == $val;
             } catch(Exception $ex) {
                 return FALSE;
             }
@@ -446,7 +455,7 @@ abstract class Orm
     /**
      * Populates the structure of the model from the database into a late static binding
      */
-    protected static function populate_table_layout()
+    public static function populate_table_layout()
     {
         // Populate the table layout.
         if (!isset(static::$instance[static::$table_name]['table_layout'])) {
@@ -455,7 +464,49 @@ abstract class Orm
             self::check_mdb2_error($describe);
             static::$instance[static::$table_name]['table_layout'] = array();
             foreach ($describe as $field) {
-                static::$instance[static::$table_name]['table_layout'][$field['Field']] = $field['Type'];
+                $key = $field['Key'] !== ''? $field['Key'] : NULL;
+                $default = $field['Default'] !== '' ? $field['Default'] : NULL;
+                $type = $field['Type'];
+                $values = array();
+                $length = NULL;
+
+                if (strpos($type, '(')) {
+                    list($type_name, $type_details) = explode('(', $type);
+
+                    $type_details = substr($type_details, 0, strrpos($type_details, ')'));
+                    $type_name = strtolower($type_name);
+
+                    if ($type_name == 'set' || $type_name == 'enum') {
+                        $new_values = explode(',', $type_details);
+                        foreach ($new_values as $val) {
+                            $val = substr($val, 1, strlen($val) - 2);
+                            $val = str_replace('\\\\', '\\', $val);
+                            $val = str_replace('\'\'', '\'', $val);
+                            $values[] = $val;
+                        }
+                    } else {
+                        $length = $type_details;
+                    }
+
+                    $type = $type_name;
+                }
+
+                $type = strtolower($type);
+
+                if (!preg_match('/^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]+$/', $field['Field'])) {
+                    throw new \Exception('Table "' . static::$table_name . '" could not be bound because "' . $field['Field'] .
+                                         '" is not a valid variable name in PHP.');
+                }
+
+                static::$instance[static::$table_name]['table_layout'][$field['Field']] = (Object)array(
+                                                                                                    'type' => $type,
+                                                                                                    'null' => $field['Null'] == 'YES',
+                                                                                                    'default' => $default,
+                                                                                                    'key' => $key,
+                                                                                                    'values' => $values,
+                                                                                                    'length' => $length,
+                                                                                                    'auto_increment' => $field['Extra'] == 'auto_increment'
+                                                                                                );
             }
         }
 
@@ -470,18 +521,45 @@ abstract class Orm
     protected static function fix_type($key, $val)
     {
         if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
-            $type = strtolower(static::$instance[static::$table_name]['table_layout'][$key]);
+            $type = static::$instance[static::$table_name]['table_layout'][$key]->type;
 
-            if (substr($type, 0, 3) === 'int') {
-                return intval($val);
-            } else if(substr($type, 0, 7) === 'varchar' || substr($type, 0, 4) == 'text') {
-                return strval($val);
-            } else if(substr($type, 0, 8) === 'datetime' || substr($type, 0, 4) === 'date' || substr($type, 0, 4) === 'time') {
-                return self::unmdb_timestamp($val);
-            } else if(substr($type, 0, 7) === 'tinyint') {
-                return ($val == TRUE);
-            } else {
-               return $val;
+            switch ($type) {
+                case 'bit':
+                case 'bool':
+                case 'tinyint':
+                    return $val;
+                case 'date':
+                case 'datetime':
+                case 'timestamp':
+                case 'time':
+                    return self::unmdb_timestamp($val);
+                case 'int':
+                case 'smallint':
+                case 'mediumint':
+                case 'bigint':
+                case 'decimal':
+                case 'float':
+                case 'double':
+                case 'real':
+                case 'year':
+                    return intval($val);
+                case 'tinytext':
+                case 'text':
+                case 'mediumtext':
+                case 'longtext':
+                case 'blob':
+                case 'tinyblob':
+                case 'mediumblob':
+                case 'longblob':
+                case 'enum':
+                case 'set':
+                case 'varchar':
+                case 'char':
+                case 'binary':
+                case 'varbinary':
+                    return strval($val);
+                default:
+                    return $val;
             }
         } else {
             return $val;
@@ -496,7 +574,7 @@ abstract class Orm
     protected static function unfix_type($key, $val)
     {
         if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
-            $type = strtolower(static::$instance[static::$table_name]['table_layout'][$key]);
+            $type = static::$instance[static::$table_name]['table_layout'][$key]->type;
 
             if(substr($type, 0, 8) === 'datetime' || substr($type, 0, 4) === 'date' || substr($type, 0, 4) === 'time') {
                 return self::mdb_timestamp($val);
