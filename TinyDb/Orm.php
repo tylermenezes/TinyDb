@@ -527,7 +527,7 @@ abstract class Orm
                 case 'bit':
                 case 'bool':
                 case 'tinyint':
-                    return $val;
+                    return $val == 1;
                 case 'date':
                 case 'datetime':
                 case 'timestamp':
