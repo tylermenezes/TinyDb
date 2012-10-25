@@ -369,7 +369,7 @@ abstract class Orm
 
         // Otherwise, don't let the user set the param
         else {
-            throw new \AccessException("Write access to paramater $key is not allowed.");
+            throw new \TinyDb\AccessException("Write access to paramater $key is not allowed.");
         }
     }
 
