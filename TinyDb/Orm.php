@@ -381,6 +381,13 @@ abstract class Orm
      */
     protected function __validate($key, $val)
     {
+        // Check if it's marked optional
+        if (static::$instance[static::$table_name]['reflector']->hasProperty('__optional_' . $key) &&
+            $this->{"__optional_$key"} === TRUE &&
+            ($val === NULL || $val === '')) {
+            return TRUE;
+        }
+
         $validator_name = '__validate_' . $key;
         // If there's a defined validation method, call it
         if (static::$instance[static::$table_name]['reflector']->hasMethod($validator_name)) {
@@ -401,11 +408,29 @@ abstract class Orm
                 case 'bool':
                     return is_bool($val);
                 case 'email':
-                    return preg_match("\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*", $val);
+                    return preg_match("/\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*/", $val);
+                case 'url':
+                    return preg_match(
+                            '/^(https?):\/\/'.                                         // protocol
+                            '(([a-z0-9$_\.\+!\*\'\(\),;\?&=-]|%[0-9a-f]{2})+'.         // username
+                            '(:([a-z0-9$_\.\+!\*\'\(\),;\?&=-]|%[0-9a-f]{2})+)?'.      // password
+                            '@)?(?#'.                                                  // auth requires @
+                            ')((([a-z0-9]\.|[a-z0-9][a-z0-9-]*[a-z0-9]\.)*'.                      // domain segments AND
+                            '[a-z][a-z0-9-]*[a-z0-9]'.                                 // top level domain  OR
+                            '|((\d|[1-9]\d|1\d{2}|2[0-4][0-9]|25[0-5])\.){3}'.
+                            '(\d|[1-9]\d|1\d{2}|2[0-4][0-9]|25[0-5])'.                 // IP address
+                            ')(:\d+)?'.                                                // port
+                            ')(((\/+([a-z0-9$_\.\+!\*\'\(\),;:@&=-]|%[0-9a-f]{2})*)*'. // path
+                            '(\?([a-z0-9$_\.\+!\*\'\(\),;:@&=-]|%[0-9a-f]{2})*)'.      // query string
+                            '?)?)?'.                                                   // path and query string optional
+                            '(#([a-z0-9$_\.\+!\*\'\(\),;:@&=-]|%[0-9a-f]{2})*)?'.      // fragment
+                            '$/i',
+                            $val
+                            );
                 case 'phone':
-                    return preg_match("1?\s*\W?\s*([2-9][0-8][0-9])\s*\W?\s*([2-9][0-9]{2})\s*\W?\s*([0-9]{4})(\se?x?t?(\d*))?", $val);
+                    return preg_match("/1?\s*\W?\s*([2-9][0-8][0-9])\s*\W?\s*([2-9][0-9]{2})\s*\W?\s*([0-9]{4})(\se?x?t?(\d*))?/", $val);
                 case 'ssn':
-                    return preg_match("^(\d{3}-?\d{2}-?\d{4}|XXX-XX-XXXX)$", $val);
+                    return preg_match("/^(\d{3}-?\d{2}-?\d{4}|XXX-XX-XXXX)$/", $val);
                 case 'date':
                 case 'time';
                 case 'datetime':
