@@ -307,6 +307,16 @@ abstract class Orm
     }
 
     /**
+     * Magic PHP function for checking if a paramater is set
+     * @param  string  $key Name of the paramater
+     * @return boolean      TRUE if the paramater is set, false otherwise
+     */
+    public function __isset($key)
+    {
+        return $this->__get($key) !== NULL;
+    }
+
+    /**
      * Magic PHP function for getting paramaters
      * @param  string $key Name of the paramater
      * @return mixed       Value of the paramater
