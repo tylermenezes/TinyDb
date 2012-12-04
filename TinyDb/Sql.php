@@ -33,6 +33,8 @@ class Sql
     protected $limit = NULL;
     protected $start = NULL;
 
+    public static $query_count = 0;
+
     /**
      * Factory-style creator so SQL commands can be created without using a variable
      * @return Sql New SQL connection
@@ -98,6 +100,15 @@ class Sql
     {
         $this->from = $what;
         return $this;
+    }
+
+    /**
+     * Checks if the query has a from statement
+     * @return boolean TRUE if the query has a from statement
+     */
+    public function has_from()
+    {
+        return count($this->from) > 0;
     }
 
     /**
@@ -616,6 +627,8 @@ class Sql
         foreach ($this->order_bys as $order_by) {
             $args = array_merge($args, $order_by['params']);
         }
+
+        self::$query_count++;
 
         return $args;
     }

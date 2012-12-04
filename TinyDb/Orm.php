@@ -36,58 +36,61 @@ abstract class Orm
      */
     public function __construct($lookup = NULL)
     {
-        // If the paramaters are passed in ... style, make them into an array
-        if (count(func_get_args()) > 1) {
-            $lookup = func_get_args();
-        }
-
-        if (!isset(static::$table_name) || !isset(static::$primary_key)) {
-            throw new \Exception('Classes using TinyDbOrm must have both a primary key and table name set.');
-        }
-
-        static::populate_table_layout();
-
-        // Populate the reflector.
-        if (!isset(static::$instance[static::$table_name]['reflector'])) {
-            static::$instance[static::$table_name]['reflector'] = new \ReflectionClass($this);
-        }
-
-        $sql = Sql::create()->select()->from(static::$table_name)->limit(1);
-
-        // If the lookup object is NULL, return an empty object:
-        if (!isset($lookup)) {
-            return;
-        }
-
-        // If the lookup object is an associative array:
-        else if (static::is_assoc_array($lookup)) {
-            foreach ($lookup as $field=>$value) {
-                $sql->where('`' . $field . '` = ?', $value);
+        if (!isset(static::$instance[static::$table_name]['data_cache'][json_encode($lookup)])) {
+            // If the paramaters are passed in ... style, make them into an array
+            if (count(func_get_args()) > 1) {
+                $lookup = func_get_args();
             }
-        }
 
-        // If the lookup object and pkey are non-associative arrays of the same size:
-        else if (is_array(static::$primary_key) && is_array($lookup) && size(static::$primary_key) === size($lookup)) {
-            for ($i = 0; $i < size($lookup); $i++) {
-                $sql->where('`' . static::$primary_key[$i] . '` = ?', static::unfix_type(static::$primary_key[$i], $lookup[$i]));
+            if (!isset(static::$table_name) || !isset(static::$primary_key)) {
+                throw new \Exception('Classes using TinyDbOrm must have both a primary key and table name set.');
             }
+
+            static::populate_table_layout();
+
+            // Populate the reflector.
+            if (!isset(static::$instance[static::$table_name]['reflector'])) {
+                static::$instance[static::$table_name]['reflector'] = new \ReflectionClass($this);
+            }
+
+            $sql = Sql::create()->select()->from(static::$table_name)->limit(1);
+
+            // If the lookup object is NULL, return an empty object:
+            if (!isset($lookup)) {
+                return;
+            }
+
+            // If the lookup object is an associative array:
+            else if (static::is_assoc_array($lookup)) {
+                foreach ($lookup as $field=>$value) {
+                    $sql->where('`' . $field . '` = ?', $value);
+                }
+            }
+
+            // If the lookup object and pkey are non-associative arrays of the same size:
+            else if (is_array(static::$primary_key) && is_array($lookup) && size(static::$primary_key) === size($lookup)) {
+                for ($i = 0; $i < size($lookup); $i++) {
+                    $sql->where('`' . static::$primary_key[$i] . '` = ?', static::unfix_type(static::$primary_key[$i], $lookup[$i]));
+                }
+            }
+
+            // Cast the lookup object to a string.
+            else {
+                $sql->where('`' . static::$primary_key . '` = ?', static::unfix_type(static::$primary_key, $lookup));
+            }
+
+            // Do the lookup.
+            $row = Db::get_read()->getRow($sql->get_sql(), NULL, $sql->get_paramaters(), NULL, MDB2_FETCHMODE_ASSOC);
+
+            // Check if there are any errors.
+            if (!isset($row)) {
+                throw new NoRecordException();
+            }
+            self::check_mdb2_error($row, $sql);
+            static::$instance[static::$table_name]['data_cache'][json_encode($lookup)] = $row;
         }
 
-        // Cast the lookup object to a string.
-        else {
-            $sql->where('`' . static::$primary_key . '` = ?', static::unfix_type(static::$primary_key, $lookup));
-        }
-
-        // Do the lookup.
-        $row = Db::get_read()->getRow($sql->get_sql(), NULL, $sql->get_paramaters(), NULL, MDB2_FETCHMODE_ASSOC);
-
-        // Check if there are any errors.
-        if (!isset($row)) {
-            throw new NoRecordException();
-        }
-        self::check_mdb2_error($row);
-
-        $this->data_fill($row);
+        $this->data_fill(static::$instance[static::$table_name]['data_cache'][json_encode($lookup)]);
     }
 
     /**
@@ -186,9 +189,9 @@ abstract class Orm
         }
 
         $result = Db::get_write()->prepare($sql->get_sql());
-        self::check_mdb2_error($result);
+        self::check_mdb2_error($result, $sql);
         $result = $result->execute($sql->get_paramaters());
-        self::check_mdb2_error($result);
+        self::check_mdb2_error($result, $sql);
 
         if (is_string(static::$primary_key) && isset($properties[static::$primary_key])) {
             $id = $properties[static::$primary_key];
@@ -240,9 +243,9 @@ abstract class Orm
 
         // Update the database
         $result = Db::get_write()->prepare($sql->get_sql());
-        self::check_mdb2_error($result);
+        self::check_mdb2_error($result, $sql);
         $result = $result->execute($sql->get_paramaters());
-        self::check_mdb2_error($result);
+        self::check_mdb2_error($result, $sql);
 
         // Clear the list of updates to make
         $this->needing_update = array();
@@ -496,7 +499,7 @@ abstract class Orm
         if (!isset(static::$instance[static::$table_name]['table_layout'])) {
             $sql = 'SHOW COLUMNS FROM `' . static::$table_name . '`;';
             $describe = Db::get_read()->getAll($sql, NULL, array(), NULL, MDB2_FETCHMODE_ASSOC);
-            self::check_mdb2_error($describe);
+            self::check_mdb2_error($describe, $sql);
             static::$instance[static::$table_name]['table_layout'] = array();
             foreach ($describe as $field) {
                 $key = $field['Key'] !== ''? $field['Key'] : NULL;
@@ -561,7 +564,6 @@ abstract class Orm
             switch ($type) {
                 case 'bit':
                 case 'bool':
-                case 'tinyint':
                     return $val == 1;
                 case 'date':
                 case 'datetime':
@@ -577,6 +579,7 @@ abstract class Orm
                 case 'double':
                 case 'real':
                 case 'year':
+                case 'tinyint':
                     return intval($val);
                 case 'tinytext':
                 case 'text':
@@ -621,10 +624,10 @@ abstract class Orm
         }
     }
 
-    private static function check_mdb2_error($result)
+    private static function check_mdb2_error($result, $sql = NULL)
     {
         if (\PEAR::isError($result)) {
-            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo());
+            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo() . (isset($sql)? "\nExecuted SQL:\n$sql" : ""));
         }
     }
 

@@ -29,13 +29,29 @@ class Collection implements \ArrayAccess, \Countable, \Iterator
         } else {
             $this->query = $query_or_model_array;
 
+            if (!$this->query->has_from()) {
+                $this->query->select($classname::$table_name . '.*')->from($classname::$table_name);
+            }
+
             $data = Db::get_read()->getAll($this->query->get_sql(), NULL, $this->query->get_paramaters(), NULL, MDB2_FETCHMODE_ASSOC);
 
             if (\PEAR::isError($data)) {
-                throw new \Exception($data->getMessage() . ', ' . $data->getDebugInfo());
+                throw new \Exception($data->getMessage() . ', ' . $data->getDebugInfo() . "\n" . $this->query);
             }
 
             $this->data = $data;
+
+            foreach ($this->data as $row) {
+                if ((array)$classname::$primary_key === $classname::$primary_key) {
+                    $lookup = array();
+                    foreach ($classname::$primary_key as $key) {
+                        $lookup[$key] = $row[$key];
+                    }
+                } else {
+                    $lookup = $row[$classname::$primary_key];
+                }
+                Orm::$instance[$classname::$table_name]['data_cache'][json_encode($lookup)] = $row;
+            }
         }
     }
 
