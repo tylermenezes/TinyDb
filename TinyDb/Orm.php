@@ -341,7 +341,7 @@ abstract class Orm
 
         // Otherwise, don't let the user get the param
         else {
-            throw new \TinyDb\AccessException("Read access to paramater $key is not allowed.");
+            throw new \TinyDb\AccessException("Read access to parameter $key is not allowed.");
         }
     }
 
