@@ -1,0 +1,8 @@
+language: php
+php:
+    - "5.4"
+
+before_install:
+    - git submodule update --init --recursive
+
+script: phpunit --configuration phpunit.xml --coverage-text
