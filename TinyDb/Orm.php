@@ -2,24 +2,26 @@
 
 namespace TinyDb;
 
+require_once(dirname(__FILE__) . '/Sql.php');
+
 /**
- * TinyORM - a tiny orm.
+ * TinyOrm - a tiny orm.
  *
  * @author      Tyler Menezes <tylermenezes@gmail.com>
- * @copyright   Copyright (c) 2012 Tyler Menezes.       Released under the BSD license.
+ * @copyright   Copyright (c) 2012-2013 Tyler Menezes.       Released under the BSD license.
  */
 abstract class Orm
 {
-    public static $table_name = NULL;
-    public static $primary_key = NULL;
+    public static $table_name = null;
+    public static $primary_key = null;
 
     public static $instance = array();
 
     protected $needing_update = array();
-    protected $is_deleted = FALSE;
+    protected $is_deleted = false;
 
-    protected $created_at = NULL;
-    protected $modified_at = NULL;
+    protected $created_at = null;
+    protected $modified_at = null;
 
     /**
      * Creates an instance of the class.
@@ -34,7 +36,7 @@ abstract class Orm
      *                                the paramater will be cast as a string, and be used as a match for the
      *                                primary key. The first result will populate the database.
      */
-    public function __construct($lookup = NULL)
+    public function __construct($lookup = null)
     {
         if (!isset(static::$instance[static::$table_name]['data_cache'][json_encode($lookup)])) {
             // If the paramaters are passed in ... style, make them into an array
@@ -55,7 +57,7 @@ abstract class Orm
 
             $sql = Sql::create()->select()->from(static::$table_name)->limit(1);
 
-            // If the lookup object is NULL, return an empty object:
+            // If the lookup object is null, return an empty object:
             if (!isset($lookup)) {
                 return;
             }
@@ -80,7 +82,7 @@ abstract class Orm
             }
 
             // Do the lookup.
-            $row = Db::get_read()->getRow($sql->get_sql(), NULL, $sql->get_paramaters(), NULL, MDB2_FETCHMODE_ASSOC);
+            $row = Db::get_read()->getRow($sql->get_sql(), null, $sql->get_paramaters(), null, MDB2_FETCHMODE_ASSOC);
 
             // Check if there are any errors.
             if (!isset($row)) {
@@ -106,13 +108,13 @@ abstract class Orm
      *                                the paramater will be cast as a string, and be used as a match for the
      *                                primary key. The first result will populate the database.
      */
-    public static function exists($lookup = NULL)
+    public static function exists($lookup = null)
     {
         try {
             new static($lookup);
-            return TRUE;
+            return true;
         } catch (NoRecordException $ex) {
-            return FALSE;
+            return false;
         }
     }
 
@@ -127,34 +129,7 @@ abstract class Orm
         }
     }
 
-    /**
-     * Gets an MDB-style timestamp in GMT
-     * @param  int    $unix_timestamp Unix timestamp
-     * @return string                 MDB timestamp
-     */
-    private static function mdb_timestamp($unix_timestamp)
-    {
-        if (!is_int($unix_timestamp)) {
-            return FALSE;
-        }
 
-        return gmdate('Y-m-d H:i:s', $unix_timestamp);
-    }
-
-    /**
-     * Gets a UNIX-style timestamp in GMT
-     * @param  string $unix_timestamp MDB timestamp
-     * @return int                    Unix timestamp
-     */
-    private static function unmdb_timestamp($mdb_timestamp)
-    {
-        if (is_int($mdb_timestamp)) {
-            return $mdb_timestamp;
-        }
-
-        $arr = \MDB2_Date::mdbstamp2Date($mdb_timestamp);
-        return gmmktime($arr['hour'], $arr['minute'], $arr['second'], $arr['month'], $arr['day'], $arr['year'], -1);
-    }
 
     /**
      * Creates an object in the database
@@ -262,7 +237,7 @@ abstract class Orm
         $sql = $this->where_this($sql);
 
         Db::get_write()->prepare($sql->get_sql())->execute($sql->get_paramaters());
-        $this->is_deleted = TRUE;
+        $this->is_deleted = true;
     }
 
     /**
@@ -273,22 +248,22 @@ abstract class Orm
     public function equals($to_compare)
     {
         if (static::$table_name != $to_compare::$table_name || static::$primary_key != $to_compare::$primary_key) {
-            return FALSE;
+            return false;
         }
 
         if (is_array(static::$primary_key)) {
             foreach (static::$primary_key as $key) {
                 if ($this->$key != $to_compare->$key) {
-                    return FALSE;
+                    return false;
                 }
             }
         } else {
             if ($this->{static::$primary_key} != $to_compare->{$to_compare::$primary_key}) {
-                return FALSE;
+                return false;
             }
         }
 
-        return TRUE;
+        return true;
     }
 
     /**
@@ -312,11 +287,11 @@ abstract class Orm
     /**
      * Magic PHP function for checking if a paramater is set
      * @param  string  $key Name of the paramater
-     * @return boolean      TRUE if the paramater is set, false otherwise
+     * @return boolean      true if the paramater is set, false otherwise
      */
     public function __isset($key)
     {
-        return $this->__get($key) !== NULL;
+        return $this->__get($key) !== null;
     }
 
     /**
@@ -390,15 +365,15 @@ abstract class Orm
      * Attempts to validate the given key
      * @param  string $key Key to validate on
      * @param  mixed  $val Value to check
-     * @return bool        TRUE if the value passes all checks, otherwise FALSE
+     * @return bool        true if the value passes all checks, otherwise false
      */
     protected function __validate($key, $val)
     {
         // Check if it's marked optional
         if (static::$instance[static::$table_name]['reflector']->hasProperty('__optional_' . $key) &&
-            $this->{"__optional_$key"} === TRUE &&
-            ($val === NULL || $val === '')) {
-            return TRUE;
+            $this->{"__optional_$key"} === true &&
+            ($val === null || $val === '')) {
+            return true;
         }
 
         $validator_name = '__validate_' . $key;
@@ -449,7 +424,7 @@ abstract class Orm
                 case 'datetime':
                     return mktime($val) > 0;
                 default:
-                    return FALSE;
+                    return false;
             }
         }
 
@@ -459,12 +434,12 @@ abstract class Orm
             try {
                 return static::fix_type($key, $val) == $val;
             } catch(Exception $ex) {
-                return FALSE;
+                return false;
             }
         }
 
         // No validation, so it's okay
-        return TRUE;
+        return true;
     }
 
     /**
@@ -498,15 +473,15 @@ abstract class Orm
         // Populate the table layout.
         if (!isset(static::$instance[static::$table_name]['table_layout'])) {
             $sql = 'SHOW COLUMNS FROM `' . static::$table_name . '`;';
-            $describe = Db::get_read()->getAll($sql, NULL, array(), NULL, MDB2_FETCHMODE_ASSOC);
+            $describe = Db::get_read()->getAll($sql, null, array(), null, MDB2_FETCHMODE_ASSOC);
             self::check_mdb2_error($describe, $sql);
             static::$instance[static::$table_name]['table_layout'] = array();
             foreach ($describe as $field) {
-                $key = $field['Key'] !== ''? $field['Key'] : NULL;
-                $default = $field['Default'] !== '' ? $field['Default'] : NULL;
+                $key = $field['Key'] !== ''? $field['Key'] : null;
+                $default = $field['Default'] !== '' ? $field['Default'] : null;
                 $type = $field['Type'];
                 $values = array();
-                $length = NULL;
+                $length = null;
 
                 if (strpos($type, '(')) {
                     list($type_name, $type_details) = explode('(', $type);
@@ -538,7 +513,7 @@ abstract class Orm
 
                 static::$instance[static::$table_name]['table_layout'][$field['Field']] = (Object)array(
                                                                                                     'type' => $type,
-                                                                                                    'null' => $field['Null'] == 'YES',
+                                                                                                    'null' => $field['null'] == 'YES',
                                                                                                     'default' => $default,
                                                                                                     'key' => $key,
                                                                                                     'values' => $values,
@@ -551,92 +526,13 @@ abstract class Orm
         return static::$instance[static::$table_name]['table_layout'];
     }
 
-    /**
-     * Auto-casts the value into the proper type for its field
-     * @param string $key Name of the paramater
-     * @param mixed  $val Value to autocast
-     */
-    protected static function fix_type($key, $val)
-    {
-        if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
-            $type = static::$instance[static::$table_name]['table_layout'][$key]->type;
-
-            switch ($type) {
-                case 'bit':
-                case 'bool':
-                    return $val == 1;
-                case 'date':
-                case 'datetime':
-                case 'timestamp':
-                case 'time':
-                    return self::unmdb_timestamp($val);
-                case 'int':
-                case 'smallint':
-                case 'mediumint':
-                case 'bigint':
-                case 'decimal':
-                case 'float':
-                case 'double':
-                case 'real':
-                case 'year':
-                case 'tinyint':
-                    return intval($val);
-                case 'tinytext':
-                case 'text':
-                case 'mediumtext':
-                case 'longtext':
-                case 'blob':
-                case 'tinyblob':
-                case 'mediumblob':
-                case 'longblob':
-                case 'enum':
-                case 'set':
-                case 'varchar':
-                case 'char':
-                case 'binary':
-                case 'varbinary':
-                    return strval($val);
-                default:
-                    return $val;
-            }
-        } else {
-            return $val;
-        }
-    }
-
-    /**
-     * Auto-casts the value back into the proper type for its field for the db
-     * @param string $key Name of the paramater
-     * @param mixed  $val Value to autocast
-     */
-    protected static function unfix_type($key, $val)
-    {
-        if (isset(static::$instance[static::$table_name]['table_layout'][$key])) {
-            $type = static::$instance[static::$table_name]['table_layout'][$key]->type;
-
-            if(substr($type, 0, 8) === 'datetime' || substr($type, 0, 4) === 'date' || substr($type, 0, 4) === 'time') {
-                return self::mdb_timestamp($val);
-            } else {
-               return $val;
-            }
-        } else {
-            return $val;
-        }
-    }
-
-    private static function check_mdb2_error($result, $sql = NULL)
-    {
-        if (\PEAR::isError($result)) {
-            throw new \Exception($result->getMessage() . ', ' . $result->getDebugInfo() . (isset($sql)? "\nExecuted SQL:\n$sql" : ""));
-        }
-    }
 
     /**
      * Checks if an object is an associative array.
      *
      * Via http://stackoverflow.com/questions/173400
      * @param  mixed    $arr    The object to check
-     * @return boolean          True if the object is an associative array, otherwise false.
+     * @return boolean          true if the object is an associative array, otherwise false.
      */
     private function is_assoc_array($arr)
     {
