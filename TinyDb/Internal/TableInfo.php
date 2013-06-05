@@ -21,20 +21,20 @@ class TableInfo
 
     public function table_info()
     {
-        if (!isset(self::$tables[$table_name])) {
-            self::$tables[$table_name] = \TinyDb\Sql::show_columns($table_name);
+        if (!isset(self::$tables[$this->table_name])) {
+            self::$tables[$this->table_name] = \TinyDb\Query::show_columns($this->table_name);
         }
 
-        return self::$tables[$table_name];
+        return self::$tables[$this->table_name];
     }
 
     public function field_info($key, $subkey = null)
     {
         $table_info = $this->table_info();
         if ($subkey !== null) {
-            return $table_info[$key][$subkey];
+            return $table_info[$key]->$subkey;
         } else {
-            return return $table_info[$key];
+            return $table_info[$key];
         }
     }
 

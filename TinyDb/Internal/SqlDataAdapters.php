@@ -11,7 +11,7 @@ namespace TinyDb\Internal;
 class SqlDataAdapters
 {
     /**
-     * Encodes the value for use in the relevant field
+     * Encodes the value for use in the database
      * @param string $column_type  MySQL column type
      * @param mixed  $val          Value to encode
      */

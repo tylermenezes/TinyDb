@@ -1,8 +1,8 @@
 <?php
 
 namespace TinyDb;
+require_once(dirname(__FILE__) . '/Internal/require.php');
 
-require_once(dirname(__FILE__) . '/Sql.php');
 
 /**
  * TinyOrm - a tiny orm.
@@ -463,67 +463,6 @@ abstract class Orm
         {
             throw new \Exception('Cannot access a deleted object');
         }
-    }
-
-    /**
-     * Populates the structure of the model from the database into a late static binding
-     */
-    public static function populate_table_layout()
-    {
-        // Populate the table layout.
-        if (!isset(static::$instance[static::$table_name]['table_layout'])) {
-            $sql = 'SHOW COLUMNS FROM `' . static::$table_name . '`;';
-            $describe = Db::get_read()->getAll($sql, null, array(), null, MDB2_FETCHMODE_ASSOC);
-            self::check_mdb2_error($describe, $sql);
-            static::$instance[static::$table_name]['table_layout'] = array();
-            foreach ($describe as $field) {
-                $key = $field['Key'] !== ''? $field['Key'] : null;
-                $default = $field['Default'] !== '' ? $field['Default'] : null;
-                $type = $field['Type'];
-                $values = array();
-                $length = null;
-
-                if (strpos($type, '(')) {
-                    list($type_name, $type_details) = explode('(', $type);
-
-                    $type_details = substr($type_details, 0, strrpos($type_details, ')'));
-                    $type_name = strtolower($type_name);
-
-                    if ($type_name == 'set' || $type_name == 'enum') {
-                        $new_values = explode(',', $type_details);
-                        foreach ($new_values as $val) {
-                            $val = substr($val, 1, strlen($val) - 2);
-                            $val = str_replace('\\\\', '\\', $val);
-                            $val = str_replace('\'\'', '\'', $val);
-                            $values[] = $val;
-                        }
-                    } else {
-                        $length = $type_details;
-                    }
-
-                    $type = $type_name;
-                }
-
-                $type = strtolower($type);
-
-                if (!preg_match('/^[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]+$/', $field['Field'])) {
-                    throw new \Exception('Table "' . static::$table_name . '" could not be bound because "' . $field['Field'] .
-                                         '" is not a valid variable name in PHP.');
-                }
-
-                static::$instance[static::$table_name]['table_layout'][$field['Field']] = (Object)array(
-                                                                                                    'type' => $type,
-                                                                                                    'null' => $field['null'] == 'YES',
-                                                                                                    'default' => $default,
-                                                                                                    'key' => $key,
-                                                                                                    'values' => $values,
-                                                                                                    'length' => $length,
-                                                                                                    'auto_increment' => $field['Extra'] == 'auto_increment'
-                                                                                                );
-            }
-        }
-
-        return static::$instance[static::$table_name]['table_layout'];
     }
 
 

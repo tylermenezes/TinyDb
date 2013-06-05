@@ -1,8 +1,8 @@
 <?php
 
 namespace TinyDb;
+require_once(dirname(__FILE__) . '/Internal/require.php');
 
-require_once(dirname(__FILE__) . '/Db.php');
 
 /**
  * Query - a class to represent and execute SQL queries.
@@ -33,17 +33,22 @@ class Query
     public function __construct($cache = true)
     {
         if (!isset(self::$query_cache)) {
-            self::$query_cache = new \TinyDb\Internal\QueryCache();
+            self::$query_cache = new \TinyDb\Internal\Query\Cache();
         }
 
-        $this->query_builder = new \TinyDb\Internal\QueryBuilder();
+        $this->query_builder = new \TinyDb\Internal\Query\Builder();
         $this->cache = $cache;
+    }
+
+    public static function create()
+    {
+        return new self();
     }
 
     public function __call($name, $args)
     {
         // If it's a query-builder function, use it to build the query.
-        if (in_array($name, $query_builder_functions)) {
+        if (in_array($name, $this->query_builder_functions)) {
             $this->query_builder = call_user_func_array(array($this->query_builder, $name), $args);
             return $this;
         }
@@ -64,7 +69,7 @@ class Query
     {
         // Load the proper (read/write) database for the operation.
         $handle = null;
-        if ($this->select === true) {
+        if ($this->query_builder->get_query_type() === 'select') {
             $handle = Db::get_read();
         } else {
             $handle = Db::get_write();
@@ -78,19 +83,86 @@ class Query
                                    $this->get_paramaters());
         }
 
-        if ($this->select === true && count($this->selects) === 1 &&
-            strpos($this->selects[0], '(') &&
+
+
+        if ($this->query_builder->get_query_type() === 'select' && count($this->query_builder->get_selects()) === 1 &&
             count($rows) === 1 && count($rows[0]) === 1 &&
             $magic) {
             return $rows[0][0];
-        } else if ($this->select === true && $this->limit === 1 && $this->magic) {
+        } else if ($this->query_builder->get_query_type() === 'select' && $this->query_builder->get_limit() === 1 && $magic) {
             return $rows[0];
-        } else if ($this->select === true) {
+        } else if ($this->query_builder->get_query_type() === 'select') {
             return $rows;
-        } else if ($this->insert === true) {
+        } else if ($this->query_builder->get_query_type() === 'insert') {
             return $handle->lastInsertId();
         } else {
             return null;
+        }
+    }
+
+    /**
+     * Gets a list of tables available in the database
+     * @return array List of tables available in the database
+     */
+    public static function show_tables()
+    {
+        $sql = 'SHOW TABLES;';
+        $handle = DB::get_write();
+        $rows = $handle->getAll($sql, null, null, null, MDB2_FETCHMODE_ORDERED);
+        if (\PEAR::isError($rows)) {
+            throw new SqlException($rows->getMessage(), $rows->getDebugInfo(), $sql, array());
+        }
+        $tables = array();
+        foreach ($rows as $row) {
+            $tables[] = $row[0];
+        }
+        return $tables;
+    }
+
+    /**
+     * Creates a table.
+     * @param  string $name   Table name
+     * @param  array  $fields List of fields; an array of fieldname: [type:string, null:boolean, key:string]
+     * @param  string $engine Engine type, usually InnoDb or (in fairly rare cases) MyISAM
+     */
+    public static function create_table($name, $fields, $engine = 'InnoDb')
+    {
+        $name = str_replace('`', '\\`', $name);
+        $sql = 'CREATE TABLE `' . $name . '` (' . "\n";
+        foreach ($fields as $k => $info) {
+            $sql .= "\t$k ";
+            $sql .= $info['type'] . ' ';
+            if (isset($info['null']) && $info['null']) {
+                $sql .= 'NULL ';
+            } else {
+                $sql .= 'NOT NULL ';
+            }
+            if (isset($info['key']) && $info['key']) {
+                $sql .= $info['key'] . ' ';
+            }
+            $sql .= ",\n";
+        }
+        $sql = substr($sql, 0, strlen($sql) - 2) . "\n";
+        $sql .= ') ENGINE=' . $engine . ';';
+        $handle = DB::get_write();
+        $rows = $handle->getOne($sql, null, null, null, MDB2_FETCHMODE_ASSOC);
+        if (\PEAR::isError($rows)) {
+            throw new SqlException($rows->getMessage(), $rows->getDebugInfo(), $sql, array());
+        }
+    }
+
+    /**
+     * Drops a table
+     * @param  string $name Name of the table to drop
+     */
+    public static function drop_table($name)
+    {
+        $name = str_replace('`', '\\`', $name);
+        $sql = 'DROP TABLE `' . $name . '`;';
+        $handle = DB::get_write();
+        $rows = $handle->getOne($sql, null, null, null, MDB2_FETCHMODE_ASSOC);
+        if (\PEAR::isError($rows)) {
+            throw new SqlException($rows->getMessage(), $rows->getDebugInfo(), $sql, array());
         }
     }
 
@@ -138,8 +210,8 @@ class Query
                 $end_parenth_location = strrpos($type_full, ')');
 
                 $type = strtolower(substr($type_full, 0, $start_parenth_location));
-                $additional_data = substr($type_full, $start_parenth_location,
-                                            $end_parenth_location - $start_parenth_location);
+                $additional_data = substr($type_full, $start_parenth_location + 1,
+                                            $end_parenth_location - $start_parenth_location - 1);
 
                 // Enums and sets store their enumerations
                 if ($type === 'enum' || $type === 'set') {
@@ -162,7 +234,7 @@ class Query
 
                 // The length
                 } else {
-                    $length = intval(additional_data);
+                    $length = intval($additional_data);
                     $values = null;
                 }
             // Not storing extra data inside the type field...
@@ -172,7 +244,7 @@ class Query
                 $values = null;
             }
 
-            $fields[$name] = array(
+            $fields[$name] = (object)array(
                 'name' => $name,
                 'type' => $type,
                 'length' => $length,
@@ -190,6 +262,6 @@ class Query
 
     public function __toString()
     {
-        return $this->get_sql();
+        return $this->query_builder->get_sql();
     }
 }

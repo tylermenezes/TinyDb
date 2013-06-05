@@ -4,11 +4,11 @@ namespace TinyDb;
 
 class SqlException extends \Exception
 {
-    protected $this->debug = null;
-    protected $this->sql = null;
-    protected $this->paramaters = null;
+    protected $debug = null;
+    protected $sql = null;
+    protected $paramaters = null;
 
-    public function getMessage()
+    public function __toString()
     {
         $message = "Couldn't execute SQL. " . $this->message . ' ' . $this->debug . " ";
         $message .= "The SQL was: \n";

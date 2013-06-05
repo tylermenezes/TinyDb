@@ -1,10 +1,7 @@
 <?php
 
 namespace TinyDb;
-
-require_once('MDB2.php');
-require_once('MDB2/Extended.php');
-require_once('MDB2/Date.php');
+require_once(dirname(__FILE__) . '/Internal/require.php');
 
 /**
  * TinyDbConnection - a class to store DB connections.
@@ -23,7 +20,7 @@ class Db
      */
     public static function get_read()
     {
-        if (count(self::read < 1)) {
+        if (count(self::$read < 1)) {
             return self::get_write();
         } else {
             return self::$read[rand(0,count(self::$read) - 1)];
@@ -58,7 +55,7 @@ class Db
         }
 
         // If they only passed in one string, make it an array
-        if (!is_array($connection_strings) {
+        if (!is_array($connection_strings)) {
             $connection_strings = array($connection_strings);
         }
 
@@ -66,7 +63,7 @@ class Db
         foreach ($connection_strings as $connection_string) {
             $connection = \MDB2::connect($connection_string);
 
-            if (\PEAR::is_error($connection)) {
+            if (\PEAR::isError($connection)) {
                 throw new ConnectionException($connection->getMessage() . ',' . $connection->getDebugInfo());
             }
 

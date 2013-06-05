@@ -1,12 +1,14 @@
 <?php
 
+namespace TinyDb\Internal\Query;
+
 /**
  * QueryCache - Caches queries intelligently
  *
  * @author      Tyler Menezes <tylermenezes@gmail.com>
  * @copyright   Copyright (c) 2013 Tyler Menezes.       Released under the BSD license.
  */
-class QueryCache
+class Cache
 {
     protected $cache = array();
 

@@ -1,8 +1,8 @@
 <?php
 
-namespace TinyDb;
+namespace TinyDb\Internal\Query;
 
-require_once(dirname(__FILE__) . '/Db.php');
+require_once(dirname(__FILE__) . '/../require.php');
 
 /**
  * QueryBuilder - represents simple queries and turns them into SQL
@@ -10,11 +10,11 @@ require_once(dirname(__FILE__) . '/Db.php');
  * @author      Tyler Menezes <tylermenezes@gmail.com>
  * @copyright   Copyright (c) 2012-2013 Tyler Menezes.       Released under the BSD license.
  */
-class QueryBuilder
+class Builder
 {
-    protected $select = true;
-    protected $insert = true;
-    protected $delete = true;
+    protected $select = false;
+    protected $insert = false;
+    protected $delete = false;
 
     protected $from = null;
     protected $into = null;
@@ -41,6 +41,56 @@ class QueryBuilder
         if ($this->insert) return 'insert';
         if ($this->update) return 'update';
         if ($this->delete) return 'delete';
+    }
+
+    public function get_selects()
+    {
+        return $this->selects;
+    }
+
+    public function get_from()
+    {
+        return $this->from;
+    }
+
+    public function get_wheres()
+    {
+        return $this->wheres;
+    }
+
+    public function get_havings()
+    {
+        return $this->havings;
+    }
+
+    public function get_order_bys()
+    {
+        return $this->order_bys;
+    }
+
+    public function get_group_bys()
+    {
+        return $this->group_bys;
+    }
+
+    public function get_unions()
+    {
+        return $this->unions;
+    }
+
+    public function get_joins()
+    {
+        return $this->joins;
+    }
+
+    public function get_limit()
+    {
+        return $this->limit;
+    }
+
+    public function get_start()
+    {
+        return $this->start;
     }
 
     /**
@@ -142,11 +192,21 @@ class QueryBuilder
      * @param  mixed  $vals Values to insert or update, or param-wise values
      * @return Sql          Current Sql statement
      */
-    public function values($vals)
+    public function values($in_vals)
     {
         if (count(func_get_args()) > 1) {
-            $vals = func_get_args();
+            $in_vals = func_get_args();
         }
+
+        $vals = array();
+        foreach ($in_vals as $val) {
+            if (is_string($val)) {
+                $vals[] = "'" . $val . "'";
+            } else {
+                $vals[] = $val;
+            }
+        }
+
         $this->vals = $vals;
 
         return $this;
@@ -163,7 +223,7 @@ class QueryBuilder
         array_shift($args);
 
         if (substr_count($set, '?') !== count($args)) {
-            throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
+            throw new \InvalidArgumentException("Query wildcards must have a 1:1 relation with passed paramaters.");
         }
 
         $this->sets[] = array(
@@ -184,9 +244,10 @@ class QueryBuilder
     {
         $args = func_get_args();
         array_shift($args);
+        array_shift($args);
 
         if (substr_count($what, '?') !== count($args)) {
-            throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
+            throw new \InvalidArgumentException("Query wildcards must have a 1:1 relation with passed paramaters.");
         }
 
         $this->joins[] = array(
@@ -209,7 +270,7 @@ class QueryBuilder
         array_shift($args);
 
         if (substr_count($query, '?') !== count($args)) {
-            throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
+            throw new \InvalidArgumentException("Query wildcards must have a 1:1 relation with passed paramaters.");
         }
 
         $this->wheres[] = array(
@@ -231,7 +292,7 @@ class QueryBuilder
         array_shift($args);
 
         if (substr_count($query, '?') !== count($args)) {
-            throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
+            throw new \InvalidArgumentException("Query wildcards must have a 1:1 relation with passed paramaters.");
         }
 
         $this->havings[] = array(
@@ -266,7 +327,7 @@ class QueryBuilder
         array_shift($args);
 
         if (substr_count($what, '?') !== count($args)) {
-            throw new \Exception("Query wildcards must have a 1:1 relation with passed paramaters.");
+            throw new \InvalidArgumentException("Query wildcards must have a 1:1 relation with passed paramaters.");
         }
 
         $this->order_bys[]= array(
@@ -316,7 +377,7 @@ class QueryBuilder
         return $this;
     }
 
-    protected function get_select()
+    protected function sql_get_select()
     {
         $sql = "";
         if ($this->select) {
@@ -335,7 +396,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_from()
+    protected function sql_get_from()
     {
         if (isset($this->from)) {
             return "\tFROM `" . $this->from . "`\n";
@@ -344,7 +405,7 @@ class QueryBuilder
         }
     }
 
-    protected function get_insert()
+    protected function sql_get_insert()
     {
         $sql = "";
         if ($this->insert) {
@@ -354,7 +415,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_into()
+    protected function sql_get_into()
     {
         $sql = "";
         if (isset($this->into)) {
@@ -373,7 +434,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_update()
+    protected function sql_get_update()
     {
         $sql = "";
         if (isset($this->update)) {
@@ -382,7 +443,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_delete()
+    protected function sql_get_delete()
     {
         $sql = "";
         if ($this->delete) {
@@ -392,7 +453,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_values()
+    protected function sql_get_values()
     {
         $sql = "";
         if (count($this->vals) > 0) {
@@ -407,7 +468,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_set()
+    protected function sql_get_set()
     {
         $sql = "";
         if (count($this->sets) > 0) {
@@ -428,7 +489,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_where()
+    protected function sql_get_where()
     {
         $sql = "";
         if (count($this->wheres) > 0) {
@@ -437,7 +498,7 @@ class QueryBuilder
                 $sql .= "\t";
                 if ($first) {
                     $sql .= 'WHERE';
-                    $first = true;
+                    $first = false;
                 } else {
                     $sql .= '  AND';
                 }
@@ -450,7 +511,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_join()
+    protected function sql_get_join()
     {
         $sql = "";
         if (count($this->joins) > 0) {
@@ -462,7 +523,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_group_by()
+    protected function sql_get_group_by()
     {
         $sql = "";
         if (count($this->group_bys) > 0) {
@@ -484,7 +545,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_having()
+    protected function sql_get_having()
     {
         $sql = "";
         if (count($this->havings) > 0) {
@@ -507,7 +568,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_order_by()
+    protected function sql_get_order_by()
     {
         $sql = "";
         if (count($this->order_bys) > 0) {
@@ -529,7 +590,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_union()
+    protected function sql_get_union()
     {
         $sql = "";
         if (count($this->unions) > 0){
@@ -541,7 +602,7 @@ class QueryBuilder
         return $sql;
     }
 
-    protected function get_limit()
+    protected function sql_get_limit()
     {
         $sql = "";
         if (isset($this->start) && isset($this->limit)) {
@@ -561,47 +622,47 @@ class QueryBuilder
         $sql = "";
 
         // SELECT
-        $sql .= $this->get_select();
+        $sql .= $this->sql_get_select();
 
         // INSERT
-        $sql .= $this->get_insert();
-        $sql .= $this->get_into();
+        $sql .= $this->sql_get_insert();
+        $sql .= $this->sql_get_into();
 
         // UPDATE
-        $sql .= $this->get_update();
+        $sql .= $this->sql_get_update();
 
         // DELETE
-        $sql .= $this->get_delete();
+        $sql .= $this->sql_get_delete();
 
         // FROM
-        $sql .= $this->get_from();
+        $sql .= $this->sql_get_from();
 
         // VALUES
-        $sql .= $this->get_values();
+        $sql .= $this->sql_get_values();
 
         // SET
-        $sql .= $this->get_set();
+        $sql .= $this->sql_get_set();
 
         // JOIN
-        $sql .= $this->get_join();
+        $sql .= $this->sql_get_join();
 
         // WHERE
-        $sql .= $this->get_where();
+        $sql .= $this->sql_get_where();
 
         // GROUP BY
-        $sql .= $this->get_group_by();
+        $sql .= $this->sql_get_group_by();
 
         // HAVING
-        $sql .= $this->get_having();
+        $sql .= $this->sql_get_having();
 
         // ORDER BY
-        $sql .= $this->get_order_by();
+        $sql .= $this->sql_get_order_by();
 
         // UNION
-        $sql .= $this->get_union();
+        $sql .= $this->sql_get_union();
 
         // LIMIT
-        $sql .= $this->get_limit();
+        $sql .= $this->sql_get_limit();
 
         $sql = substr($sql, 0, strlen($sql) - 1); // Strip off trailing \n.
         $sql .= ';';
