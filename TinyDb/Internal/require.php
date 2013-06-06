@@ -8,11 +8,13 @@ require_once(dirname(__FILE__) . '/Properties.php');
 require_once(dirname(__FILE__) . '/SqlDataAdapters.php');
 require_once(dirname(__FILE__) . '/TableInfo.php');
 require_once(dirname(__FILE__) . '/AccessManager.php');
+require_once(dirname(__FILE__) . '/Collection.php');
 
 require_once(dirname(__FILE__) . '/Query/Builder.php');
 require_once(dirname(__FILE__) . '/Query/Cache.php');
 require_once(dirname(__FILE__) . '/Query/Result/Row.php');
 require_once(dirname(__FILE__) . '/Query/Result.php');
+require_once(dirname(__FILE__) . '/Query/Model.php');
 
 require_once(dirname(__FILE__) . '/../Orm.php');
 require_once(dirname(__FILE__) . '/../Db.php');

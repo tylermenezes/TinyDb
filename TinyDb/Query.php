@@ -88,11 +88,11 @@ class Query
         if ($this->query_builder->get_query_type() === 'select' && count($this->query_builder->get_selects()) === 1 &&
             count($rows) === 1 && count($rows[0]) === 1 &&
             $magic) {
-            return $rows[0][0];
+            return $rows[0][array_keys($rows[0])[0]];
         } else if ($this->query_builder->get_query_type() === 'select' && $this->query_builder->get_limit() === 1 && $magic) {
-            return $rows[0];
+            return new \TinyDb\Internal\Query\Result($rows[0]);
         } else if ($this->query_builder->get_query_type() === 'select') {
-            return $rows;
+            return new \TinyDb\Internal\Query\Result($rows);
         } else if ($this->query_builder->get_query_type() === 'insert') {
             return $handle->lastInsertId();
         } else {

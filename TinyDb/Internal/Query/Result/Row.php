@@ -48,7 +48,7 @@ class Row implements \ArrayAccess, \Countable, \Iterator
 
     public function offsetSet($offset, $val)
     {
-        throw new \TinyDb\AccessException($offset);
+        $this->data[$this->getKey($offset)] = $val;
     }
 
     public function offsetUnset($offset)

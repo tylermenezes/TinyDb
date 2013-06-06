@@ -24,11 +24,95 @@ abstract class Orm
         if (is_a($new_data_or_datafill, '\\TinyDb\\Internal\\Query\\Result\\Row')) {
             $this->tinydb_datafill($new_data_or_datafill);
         } else {
+            $this->tinydb_create($new_data_or_datafill);
+        }
+    }
 
+    public static function find($pkey = null)
+    {
+        if (count(func_get_args()) > 1) {
+            $pkey = func_get_args();
+        }
+
+        if ($pkey !== null) {
+            return static::tinydb_add_where_for_pkey($pkey, new \TinyDb\Internal\Query\Model(get_called_class()))->one();
+        } else {
+            return new \TinyDb\Internal\Query\Model(get_called_class());
+        }
+    }
+
+    public function __get($key)
+    {
+        $this->tinydb_check_deleted();
+
+        $visibility = $this->tinydb_access_manager->get_publicity($key);
+        $current_scope = $this->tinydb_get_calling_scope();
+        if ($current_scope < $visibility || !static::tinydb_get_table_info()->field_info($key)) {
+            throw new \TinyDb\AccessException('Could not access ' . $key);
+        }
+
+        return \TinyDb\Internal\SqlDataAdapters::decode(static::tinydb_get_table_info()->field_info($key)->type,
+                                                        $this->tinydb_rowdata[$key]);
+    }
+
+    public function __set($key, $value)
+    {
+        $this->tinydb_check_deleted();
+
+        $visibility = $this->tinydb_access_manager->get_publicity($key);
+        $current_scope = $this->tinydb_get_calling_scope();
+        if ($current_scope < $visibility || !static::tinydb_get_table_info()->field_info($key)) {
+            throw new \TinyDb\AccessException('Could not access ' . $key);
+        }
+
+        if (static::tinydb_get_table_info()->field_info('modified_at') !== null) {
+            $this->tinydb_rowdata['modified_at'] =
+                        \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info('modified_at')->type, time());
+        }
+
+
+        $value = \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info($key)->type, $value);
+        $this->tinydb_rowdata[$key] = $value;
+        $this->tinydb_invalidate($key);
+    }
+
+    /**
+     * Updates the database
+     */
+    public function update()
+    {
+        if (!$this->tinydb_is_deleted) {
+            $query = $this->tinydb_add_where(\TinyDb\Query::create()->update(static::$table_name));
+            foreach ($this->tinydb_needing_update as $field)
+            {
+                $query->set('`' . $field . '` = ?', $this->tinydb_rowdata[$field]);
+            }
+            $query->exec();
+            $this->tinydb_needing_update = array();
+        }
+    }
+
+    /**
+     * Deletes the object
+     */
+    public function delete()
+    {
+        $this->tinydb_add_where(\TinyDb\Query::create()->delete()->from(static::$table_name))->exec();
+        $this->tinydb_is_deleted = true;
+    }
+
+    /* # Object instantiation logic */
+
+    /**
+     * Creates the object in the database and populates the object data.
+     * @param  array  $data Associative array of data to fill the object with
+     */
+    private function tinydb_create($data)
+    {
             $values = array();
             foreach (static::tinydb_get_table_info()->table_info() as $field => $info) {
-                if (isset($new_data_or_datafill[$field])) {
-                    $values[$field] = $new_data_or_datafill[$field];
+                if (isset($data[$field])) {
+                    $values[$field] = $data[$field];
                 } else if ($field === 'created_at' || $field === 'modified_at') {
                     $values[$field] = time();
                 } else if (!$info->nullable) {
@@ -43,74 +127,18 @@ abstract class Orm
 
             $id = \TinyDb\Query::create()->insert()->into(static::$table_name, array_keys($values))->values(array_values($values))->exec();
 
-            // TODO: if pkey is an array, use that instead of ID
+            // If the primary key is composite, generate the primary key
+            if (is_array(static::tinydb_get_table_info()->primary_key)) {
+                $id = array();
+                foreach (static::tinydb_get_table_info()->primary_key as $field) {
+                    $id[$field] = $data[$field];
+                }
+            }
 
             $query = \TinyDb\Query::create()->select('*')->from(static::$table_name);
             $query = static::tinydb_add_where_for_pkey($id, $query);
             $row = $query->exec()[0];
             $this->tinydb_datafill($row);
-        }
-    }
-
-    public static function find($pkey = null)
-    {
-        if (count(func_get_args()) > 1) {
-            $pkey = func_get_args();
-        }
-
-        if ($pkey !== null) {
-            return static::tinydb_add_where_for_pkey($pkey, new \TinyDb\Internal\Query\Model(get_class()))->one();
-        } else {
-            return new \TinyDb\Internal\Query\Model(get_class());
-        }
-    }
-
-    public function __get($key)
-    {
-        $visibility = $this->tinydb_access_manager->get_publicity($key);
-        $current_scope = $this->tinydb_get_calling_scope();
-        if ($current_scope < $visibility || !static::tinydb_get_table_info()->field_info($key)) {
-            throw new \TinyDb\AccessException('Could not access ' . $key);
-        }
-
-        //TODO: SqlDataAdapters
-        return $this->tinydb_rowdata[$key];
-    }
-
-    public function __set($key, $value)
-    {
-        $visibility = $this->tinydb_access_manager->get_publicity($key);
-        $current_scope = $this->tinydb_get_calling_scope();
-        if ($current_scope < $visibility || !static::tinydb_get_table_info()->field_info($key)) {
-            throw new \TinyDb\AccessException('Could not access ' . $key);
-        }
-
-        //TODO: SqlDataAdapters
-        $this->tinydb_rowdata[$key] = $value;
-        $this->tinydb_invalidate($key);
-    }
-
-    /**
-     * Updates the database
-     */
-    public function update()
-    {
-        $query = \TinyDb\Query::create()->update(static::$table_name);
-        foreach ($this->tinydb_needing_update as $field)
-        {
-            $query->set('`' . $field . '` = ?', $this->tinydb_rowdata[$key]);
-        }
-        $query->exec();
-        $this->tinydb_needing_update = array();
-    }
-
-    /**
-     * Invalidates a field, forcing an update with the database
-     * @param  string $key Name of the field to update
-     */
-    private function tinydb_invalidate($key)
-    {
-        $this->tinydb_needing_update[] = $key;
     }
 
     /**
@@ -119,19 +147,36 @@ abstract class Orm
      */
     private function tinydb_datafill($data)
     {
-        // We're loading an object from the provided data
-        foreach ($data as $k => $v) {
-            // Fix up access information
-            $this->tinydb_access_manager = new \TinyDb\Internal\AccessManager($this->tinydb_get_reflector());
-            foreach ($this->tinydb_get_table_info->table_info() as $name => $field) {
-                if (isset($this->$name)) {
-                    unset($this->$name);
-                }
-            }
-
-            // Set the information from the database
-            $this->tinydb_rowdata = $this->data;
+        // Fix up access information
+        $this->tinydb_access_manager = new \TinyDb\Internal\AccessManager($this->tinydb_get_reflector());
+        foreach (static::tinydb_get_table_info()->table_info() as $name => $field) {
+            unset($this->$name);
         }
+
+        // Set the information from the database
+        $this->tinydb_rowdata = $data;
+    }
+
+    /* # Helpers */
+    /* ## Query Helpers */
+
+    /**
+     * Adds a WHERE clause for the current object.
+     * @param  object $query The query to add the where clause on
+     */
+    private function tinydb_add_where($query)
+    {
+        $pkey = static::tinydb_get_table_info()->primary_key;
+        if (is_array($pkey)) {
+            $val = array();
+            foreach ($pkey as $field) {
+                $val[$field] = $this->$field;
+            }
+        } else {
+            $val = $this->$pkey;
+        }
+
+        return static::tinydb_add_where_for_pkey($val, $query);
     }
 
     /**
@@ -170,6 +215,28 @@ abstract class Orm
         return $query;
     }
 
+    /* ## Validation Helpers */
+
+    /**
+     * Checks if the object was deleted, and throws an exception if so.
+     */
+    private function tinydb_check_deleted()
+    {
+        if ($this->tinydb_is_deleted) {
+            throw new \TinyDb\NoRecordException('Object was deleted.');
+        }
+    }
+
+    /**
+     * Invalidates a field, forcing an update with the database
+     * @param  string $key Name of the field to update
+     */
+    private function tinydb_invalidate($key)
+    {
+        $this->tinydb_needing_update[] = $key;
+    }
+
+    /* ## Misc */
 
     /**
      * Gets the scope of the calling class relative to the current class.

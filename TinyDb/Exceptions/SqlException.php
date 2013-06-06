@@ -21,6 +21,9 @@ class SqlException extends \Exception
 
     public function __construct($message, $debug, $sql, $paramaters = null)
     {
+        $message = "Couldn't execute SQL. " . $message . ' ' . $debug . " ";
+        $message .= "The SQL was: \n";
+        $message .= $sql . "\n";
         $this->message = $message;
         $this->debug = $debug;
         $this->sql = $sql;
