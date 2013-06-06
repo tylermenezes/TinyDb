@@ -127,7 +127,6 @@ propertyName with the name of the property):
  * `set_propertyName($val)`
 
 Foreign Keys
-
 ------------
 
 You can mark a key as foreign in a docblock immediately preceding it:

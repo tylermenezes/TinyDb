@@ -107,9 +107,4 @@ class Db
         self::set_read($read);
         self::set_write($write);
     }
-
-    public function __destruct()
-    {
-        $this->update();
-    }
 }

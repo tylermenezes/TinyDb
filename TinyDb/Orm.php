@@ -118,6 +118,11 @@ abstract class Orm
         }
     }
 
+    public function __destruct()
+    {
+        $this->update();
+    }
+
     /**
      * Deletes the object
      */
