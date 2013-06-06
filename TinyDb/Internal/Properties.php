@@ -2,6 +2,8 @@
 
 namespace TinyDb\Internal;
 
+require_once(dirname(__FILE__) . '/require.php');
+
 trait Properties
 {
     private $tinydb_internal_properties_reflector = null;

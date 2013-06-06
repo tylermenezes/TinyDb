@@ -11,7 +11,8 @@ class TableInfoTest extends PHPUnit_Framework_TestCase
         try { \TinyDb\Query::drop_table('foobar'); } catch (\Exception $ex) {}
         \TinyDb\Query::create_table('foobar', array(
             'username' => array(
-                'type' => 'VARCHAR(255)'
+                'type' => 'VARCHAR(255)',
+                'key' => 'primary'
             ),
             'password' => array(
                 'type' => 'VARCHAR(255)',
@@ -39,7 +40,7 @@ class TableInfoTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(null, $uname_info->default);
         $this->assertEquals(null, $uname_info->extra);
         $this->assertEquals(false, $uname_info->auto_increment);
-        $this->assertEquals(false, $uname_info->key);
+        $this->assertEquals('primary', $uname_info->key);
 
         $pwd_info = $this->table_info->field_info('password');
         $this->assertEquals('password', $pwd_info->name);
@@ -63,6 +64,28 @@ class TableInfoTest extends PHPUnit_Framework_TestCase
         $this->assertEquals(true, $this->table_info->is_numeric('xyz'));
         $this->assertEquals(true, $this->table_info->is_integral('xyz'));
         $this->assertEquals(true, $this->table_info->is_set('foobar'));
+    }
+
+    public function testGetPkey()
+    {
+        $this->assertEquals('username', $this->table_info->primary_key);
+
+        try { \TinyDb\Query::drop_table('foo3'); } catch (\Exception $ex) {}
+        \TinyDb\Query::create_table('foo3', array(
+            'id1' => array(
+                'type' => 'VARCHAR(255)',
+                'key' => 'PRIMARY'
+            ),
+            'id2' => array(
+                'type' => 'VARCHAR(255)',
+                'key' => 'PRIMARY'
+            )
+        ));
+
+        $t = new \TinyDb\Internal\TableInfo('foo3');
+        $this->assertEquals(array('id1', 'id2'), $t->primary_key);
+
+        \TinyDb\Query::drop_table('foo3');
     }
 
     public function testCache()

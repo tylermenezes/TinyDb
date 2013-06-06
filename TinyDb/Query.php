@@ -13,7 +13,7 @@ require_once(dirname(__FILE__) . '/Internal/require.php');
 class Query
 {
     protected $query_builder;
-    protected $query_builder_functions = array(
+    public static $query_builder_functions = array(
                     'select', 'insert', 'update', 'delete',
                     'from', 'into',
                     'values', 'set',
@@ -48,7 +48,7 @@ class Query
     public function __call($name, $args)
     {
         // If it's a query-builder function, use it to build the query.
-        if (in_array($name, $this->query_builder_functions)) {
+        if (in_array($name, self::$query_builder_functions)) {
             $this->query_builder = call_user_func_array(array($this->query_builder, $name), $args);
             return $this;
         }
@@ -129,6 +129,7 @@ class Query
     {
         $name = str_replace('`', '\\`', $name);
         $sql = 'CREATE TABLE `' . $name . '` (' . "\n";
+        $keys = array();
         foreach ($fields as $k => $info) {
             $sql .= "\t$k ";
             $sql .= $info['type'] . ' ';
@@ -138,10 +139,22 @@ class Query
                 $sql .= 'NOT NULL ';
             }
             if (isset($info['key']) && $info['key']) {
-                $sql .= $info['key'] . ' ';
+                $keys[strtolower(trim($info['key']))][] = $k;
             }
             $sql .= ",\n";
         }
+
+        // Add in the keys
+        foreach ($keys as $type => $fields)
+        {
+            $sql .= "\t" . strtoupper($type) . ' KEY ' . '(';
+            foreach ($fields as $field) {
+                $sql .= '`' . $field . '`, ';
+            }
+            $sql = substr($sql, 0, strlen($sql) - 2);
+            $sql .= "),\n";
+        }
+
         $sql = substr($sql, 0, strlen($sql) - 2) . "\n";
         $sql .= ') ENGINE=' . $engine . ';';
         $handle = DB::get_write();
@@ -190,7 +203,11 @@ class Query
             $nullable = strtolower($field['Null']) === 'yes';
             $default = $field['Default'];
             $extra = $field['Extra'];
-            $key = $field['Key'];
+            $key = strtolower($field['Key']);
+
+            if ($key === 'pri') {
+                $key = 'primary';
+            }
 
             // Convert truthy-false to real false if the column isn't a primary key
             if (!$key) {

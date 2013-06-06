@@ -2,6 +2,8 @@
 
 namespace TinyDb\Internal;
 
+require_once(dirname(__FILE__) . '/require.php');
+
 /**
  * SqlDataAdapters - methods for converting data between SQL and PHP values
  *

@@ -7,6 +7,7 @@ require_once('MDB2/Date.php');
 require_once(dirname(__FILE__) . '/Properties.php');
 require_once(dirname(__FILE__) . '/SqlDataAdapters.php');
 require_once(dirname(__FILE__) . '/TableInfo.php');
+require_once(dirname(__FILE__) . '/AccessManager.php');
 
 require_once(dirname(__FILE__) . '/Query/Builder.php');
 require_once(dirname(__FILE__) . '/Query/Cache.php');
