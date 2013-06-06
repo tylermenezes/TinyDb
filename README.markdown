@@ -66,7 +66,7 @@ FROM ...` query), execute() will return only that result. Likewise, if you run `
 
 ORM
 ===
-ORM-enabled classes are created by extending from `\TinyDb\Orm`. All TinyOrm classes need to create one static field:
+ORM-enabled classes are created by extending from `\TinyDb\Orm`. All Orm classes need to create one static field:
 
  * `table_name` - the name of the table
 
@@ -85,7 +85,7 @@ to fields in the database and returns the created object. i.e.
 
 Loading Objects
 ---------------
-There are several ways to load objects in TinyOrm.
+There are several ways to load objects in TinyDb.
 
  * Pass the value of a primary key into the static `::one()` function: `Models\User::one('tylermenezes')`. For composite keys, use an
    array, or pass the values params-wise.
@@ -99,9 +99,9 @@ The latter is the most flexible. For example, to get an array containing all use
 Updating Objects
 ----------------
 Whenever you've made some updates to an object and want to commit them to the database, call the `update()`
-function and TinyOrm will take care of it.
+function and TinyDb will take care of it.
 
-Optionally, don't call `update()` and TinyOrm will update it for you in its destructor. This generally makes
+Optionally, don't call `update()` and TinyDb will update it for you in its destructor. This generally makes
 tracking down update bugs more difficult, however, so it's not suggested.
 
 Deleting Objects
@@ -111,7 +111,7 @@ anything after it's deleted, however any copies you might have won't, so be care
 
 Magic Fields
 ------------
-TinyOrm supports a few magic fields:
+TinyDb supports a few magic fields:
 
  * `created_at` - the date the object was first created
  * `modified_at` - the date the object was last modified
@@ -120,13 +120,14 @@ These fields will be automatically filled if a field of the type `datetime` exis
 
 Properties
 ----------
-TinyOrm supports properties. To create one, define one or both of the magic methods (replacing
+TinyDb supports properties. To create one, define one or both of the magic methods (replacing
 propertyName with the name of the property):
 
  * `get_propertyName()`
  * `set_propertyName($val)`
 
 Foreign Keys
+
 ------------
 
 You can mark a key as foreign in a docblock immediately preceding it:
