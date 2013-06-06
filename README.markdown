@@ -92,7 +92,7 @@ There are several ways to load objects in TinyOrm.
  * Pass the value of a primary key into the static `::find()` function, which serves as a shortcut to `::one()` when used like this.
  * Use the static `::find()` method with no parameters to build up a query chain, terminated with `->one()` or `->all()`.
 
- The latter is the most flexible. For example, to get an array containing all users under 18, you might write a query like so:
+The latter is the most flexible. For example, to get an array containing all users under 18, you might write a query like so:
 
     $under_18_users = Models\User::find()->where('age < ?', 20)->all();
 
