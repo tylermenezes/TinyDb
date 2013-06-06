@@ -34,6 +34,11 @@ class TableInfo
     public function field_info($key, $subkey = null)
     {
         $table_info = $this->table_info();
+
+        if (!isset($table_info[$key])) {
+            return null;
+        }
+
         if ($subkey !== null) {
             return $table_info[$key]->$subkey;
         } else {

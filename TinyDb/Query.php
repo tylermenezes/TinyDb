@@ -132,12 +132,17 @@ class Query
         $keys = array();
         foreach ($fields as $k => $info) {
             $sql .= "\t$k ";
-            $sql .= $info['type'] . ' ';
+            $sql .= $info['type'];
             if (isset($info['null']) && $info['null']) {
-                $sql .= 'NULL ';
+                $sql .= ' NULL';
             } else {
-                $sql .= 'NOT NULL ';
+                $sql .= ' NOT NULL';
             }
+
+            if (isset($info['auto_increment']) && $info['auto_increment']) {
+                $sql .= ' AUTO_INCREMENT';
+            }
+
             if (isset($info['key']) && $info['key']) {
                 $keys[strtolower(trim($info['key']))][] = $k;
             }

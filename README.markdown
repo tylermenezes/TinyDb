@@ -28,76 +28,73 @@ this with the `\TinyDb\Db::set()` method. It takes either one or two paramaters:
  * `$write` - a read/write connection to the database
  * `$read` - a read-only connection to the database (optional)
 
-Both of the paramaters should either be an MDB2 connection, or a MDB2 connection string.
+Both of the paramaters should either be an MDB2 connection, a MDB2 connection string, or an array of one of the former. If an array is
+used, one will be randomly selected at runtime.
 
 Using $read is a super simple way to load balance - have one read/write master MySQL server, and several
-read-only slaves. Then just pick a read-only server at random when you initialize TinyDb. It may not scale
-to infinity, but it scales easily and quickly!
+read-only slaves. Then just pick a read-only server at random when you initialize TinyDb.
 
-SQL
+Query
 ===
-TinyDb makes SQL easy. Just use the `\TinyDb\Sql` object to write queries like you normally would, except
-with PHP functions. The easiest way to explain is to show you:
+TinyDb makes SQL easy. Just use the `\TinyDb\Query` object to write queries like you normally would, except
+with PHP functions. The easiest way to explain is with code:
 
     // SELECTing...
-    \TinyDb\Sql::create()->select('*')->from('users')->join('`cats` USING (`catID`)', 'LEFT')->limit(5, 15);
+    \TinyDb\Query::create()->select('*')->from('users')->join('`cats` USING (`catID`)', 'LEFT')->limit(5, 15);
 
     // INSERTing...
-    \TinyDb\Sql::create()->insert()->into('cats', ['breedID', 'color'])->values(12, 'blue');
-    \TinyDb\Sql::create()->insert()->into('users')->set('breedID = ?', 12)->set('color = ?', 'blue');
+    \TinyDb\Query::create()->insert()->into('cats', ['breedID', 'color'])->values(12, 'blue');
+    \TinyDb\Query::create()->insert()->into('users')->set('breedID = ?', 12)->set('color = ?', 'blue');
 
     // UPDATEing...
-    \TinyDb\Sql::create()->update('users')->set('breedID = ?', 11)->where('catID = ?', 4)->limit(1);
+    \TinyDb\Query::create()->update('users')->set('breedID = ?', 11)->where('catID = ?', 4)->limit(1);
 
     // and even DELETEing!
-    \TinyDb\Sql::create()->delete()->from('users')->where('breedID = ?', 5);
+    \TinyDb\Query::create()->delete()->from('users')->where('breedID = ?', 5);
 
 Other than a few minor differences (notice the format of `join()`), it's exactly what you'd expect. And every
-method returns the Sql object, so you can chain them together. (It's definitely mutable, though! Be careful
+method returns the Query object, so you can chain them together. (It's definitely mutable, though! Be careful
 to always clone an object if you don't want the main object changed).
 
-Notice those question marks? That's right, TinySql will automatically prepare your query for you, too! (One
+Notice those question marks? That's right, TinyDb will automatically prepare your query for you, too! (One
 quick note about this: it's not possible to use the auto-prepare feature if you use VALUES() notation for
-inserts! I strongly recommend SET notation.)
+inserts! SET notation is strongly recommended.)
+
+To execute your query, terminate the chain with `execute()`. If the query is clearly limited to a [1x1] result (e.g. a `SELECT COUNT(*)
+FROM ...` query), execute() will return only that result. Likewise, if you run `->limit(1)`, it will return only the row, instead of a
+1-length row collection. This behavior is usually helpful, but can be disabled by passing `true` to `execute()`.
 
 ORM
 ===
-ORM-enabled classes are created by extending from `\TinyDb\Orm`. All TinyOrm classes need to create two
-static fields:
+ORM-enabled classes are created by extending from `\TinyDb\Orm`. All TinyOrm classes need to create one static field:
 
  * `table_name` - the name of the table
- * `primary_key` - the primary key of the table (either a string, or an array if it's a composite key)
 
-The remainder of the ORM is handled by creating protected instance variables with the names of database
-fields. The type of the field will be automatically inferred from the database structure. Remember,
-that's _protected_ instance variables. Marking them protected causes get and set requests to go through
-TinyOrm's magic PHP getters and setters.
+The remainder of the ORM is handled by creating instance variables with the names of database fields. The type of the field will be
+automatically inferred from the database structure.
 
 Creating Objects
 ----------------
-To create an object, just call the static function `create()` on that object's type. It takes an
-associative array of keys and values which correspond to fields in the database and returns the
-created object. You'll probably want to override it in your models for simplicity, i.e.:
+To create an object, just create a new object of that type. Its constructor takes an associative array of keys and values which correspond
+to fields in the database and returns the created object. i.e.
 
-    public static function create($name, $breed, $color)
-    {
-        return parent::create([
-            'name' => $name,
-            'breedID' => $breed->breedID,
-            'color' => $color
-        ]);
-    }
-
-(If you do override it, make sure to __return__ the result of `parent::create`!)
+    $user = new Models\User([
+        'username' => 'tylermenezes',
+        'age' => 20
+    ]);
 
 Loading Objects
 ---------------
-There are several ways to load objects in TinyOrm. All of them involve the constructor.
+There are several ways to load objects in TinyOrm.
 
- * You can use an empty constructor. The object will be uninitialized. You can fill it later with `fill_data()`
- * You can pass a primative, and TinyOrm will load the object with the primary key which matches
- * If the primary key is an array, you can pass an array of primatives
- * You can pass an associative array, which TinyOrm turns into a WHERE statement
+ * Pass the value of a primary key into the static `::one()` function: `Models\User::one('tylermenezes')`. For composite keys, use an
+   array, or pass the values params-wise.
+ * Pass the value of a primary key into the static `::find()` function, which serves as a shortcut to `::one()` when used like this.
+ * Use the static `::find()` method with no parameters to build up a query chain, terminated with `->one()` or `->all()`.
+
+ The latter is the most flexible. For example, to get an array containing all users under 18, you might write a query like so:
+
+    $under_18_users = Models\User::find()->where('age < ?', 20)->all();
 
 Updating Objects
 ----------------
@@ -111,25 +108,6 @@ Deleting Objects
 ----------------
 To delete an object just call the `delete()` function on it. (The object will prevent you from accessing
 anything after it's deleted, however any copies you might have won't, so be careful.)
-
-Validations
------------
-TinyOrm supports validating your fields (and your properties, which we'll get to in a moment). You can define
-a validation by defining a function: `__validate_fieldName($val)` (where fieldName is the name of the field to
-validate, obviously.)
-
-TinyOrm even includes some built-in validations! To use them, use a string for `__validate_fieldName` instead of
-a function. The value should be one of the following:
-
- * string/str
- * integer/int
- * boolean/bool
- * email
- * phone
- * ssn
- * date
- * time
- * datetime
 
 Magic Fields
 ------------
@@ -145,102 +123,19 @@ Properties
 TinyOrm supports properties. To create one, define one or both of the magic methods (replacing
 propertyName with the name of the property):
 
- * `__get_propertyName()`
- * `__set_propertyName($val)`
+ * `get_propertyName()`
+ * `set_propertyName($val)`
 
-This is quite useful for foreign keys. For example, imagine a blog post, which has an associated user.
-The database collects this relationship with the field `userID`. We can create a lazy-loaded user as such:
+Foreign Keys
+------------
 
-    private $_user = NULL;
-    protected function __get_user()
-    {
-        if (!isset($this->_user)) {
-            $this->_user = new Models\User($this->userID);
-        }
+You can mark a key as foreign in a docblock immediately preceding it:
 
-        return $this->_user;
-    }
+    /**
+     * The user's company
+     * @foreign \Foo\Models\Company company
+     */
+    public $companyID;
 
-    protected function __set_user(Models\User $val)
-    {
-        $this->_user = NULL;
-        $this->userID = $val->userID;
-    }
-
-That's it - now we can call, for example, `$blogpost->user->username` and it works exactly as you'd expect.
-Note that if we hadn't defined a `__set_user()` method, attempts to change the user would fail.
-
-Collections
-===========
-Collections are just what they sound like: collections of things. TinyOrm classes, to be specific. Creating
-a collection is easy, just pass it the name of a Model which inherits from `\TinyDb\Orm` and a Sql query.
-The collection will be populated with all the models matching the query!
-
-You'll find that it's often useful to extend a collection and add your own constructor and methods. For
-example:
-
-    class Permissions extends \TinyDb\Collection
-    {
-        protected $user = NULL;
-        public function __construct($user)
-        {
-            $this->user = $user;
-            parent::__construct('\StudentRnd\Models\AccessControl\Permission',
-                \TinyDb\Sql::create()
-                        ->select()
-                        ->from(AccessControl\Permission::$table_name)
-                        ->join('`users_permissions` USING (`permissionID`)')
-                        ->where('`userID` = ?', $user->userID));
-        }
-
-        public function has_permission($permission)
-        {
-            return $this->contains(function($model) use($permission) {
-                return $model->name === $permission;
-            });
-        }
-
-        public function grant_permission($permission)
-        {
-            $this->data[] = Mappings\UserPermission::create($this->user, $permission);
-        }
-
-        public function remove_permission($permission)
-        {
-            $mapping = new Mappings\UserPermission($this->user, $permission);
-            $this->remove($mapping);
-            $mapping->delete();
-        }
-    }
-
-Collections have several useful methods:
-
-`each($lambda)`
----------------
-`each` performs an action on each model in the collection. It takes one paramater, a function to perform which
-itself takes one paramater - the model to perform the action on. The return values for `$lambda` are collected
-into an array, which this function returns.
-
-`find($lambda)`
----------------
-`find` builds a subcollection of models matching a given query. It takes one paramater - again, a function which
-is executed on each model (passed to the callback as its first paramater). If that function returns `TRUE`, the
-model is included. Because it returns a `TinyDb\Collection`, you can chain calls off this.
-
-`find_one($lambda)`
--------------------
-A shortcut for `find($lambda)[0]`. Returns an instance of `TinyDb\Orm`, or `NULL` if none is found.
-
-`filter($lambda)`
------------------
-The mutable version of `find($lambda)`. Updates and returns the current collection. You can chain calls off this.
-
-`remove($model)`
-----------------
-A shortcut for `find(function($m) use($model){return (!$model->equals($m));})`. Removes all instances of the model
-from the current collection.
-
-`contains($lambda)`
--------------------
-A shortcut for `count(find($lambda)) > 0`. Returns `TRUE` if the collection contains at least one matching model,
-otherwise `FALSE`.
+Attempting to access `$user->company`, in the above example, would automatically load the corresponding `Company` with that `companyID`.
+This only works for foreign relations of a single primary key, and the exposed param is always public. For greater control, use properties.

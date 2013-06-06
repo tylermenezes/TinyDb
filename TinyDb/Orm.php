@@ -28,6 +28,11 @@ abstract class Orm
         }
     }
 
+    /**
+     * Finds an existing instance of the model
+     * @param  [mixed] $pkey Primary key to lookup by. If null, will return a Query which should be terminated with one() or all().
+     * @return mixed         Class instance, or Collection
+     */
     public static function find($pkey = null)
     {
         if (count(func_get_args()) > 1) {
@@ -35,45 +40,66 @@ abstract class Orm
         }
 
         if ($pkey !== null) {
-            return static::tinydb_add_where_for_pkey($pkey, new \TinyDb\Internal\Query\Model(get_called_class()))->one();
+            return static::one($pkey);
         } else {
             return new \TinyDb\Internal\Query\Model(get_called_class());
         }
     }
 
+    public static function one($pkey)
+    {
+        if (count(func_get_args()) > 1) {
+            $pkey = func_get_args();
+        }
+
+        return static::tinydb_add_where_for_pkey($pkey, new \TinyDb\Internal\Query\Model(get_called_class()))->one();
+    }
+
+    private $tinydb_extern_cache = array();
     public function __get($key)
     {
         $this->tinydb_check_deleted();
 
-        $visibility = $this->tinydb_access_manager->get_publicity($key);
-        $current_scope = $this->tinydb_get_calling_scope();
-        if ($current_scope < $visibility || !static::tinydb_get_table_info()->field_info($key)) {
-            throw new \TinyDb\AccessException('Could not access ' . $key);
+        if ($this->tinydb_getset_is_method("get_$key")) {
+            $method_name = "get_$key";
+            return $this->$method_name();
+        } else if ($this->tinydb_getset_is_table_field($key)) {
+            return \TinyDb\Internal\SqlDataAdapters::decode(static::tinydb_get_table_info()->field_info($key)->type,
+                                                            $this->tinydb_rowdata[$key]);
+        } else if ($this->tinydb_getset_is_foreign($key)) {
+            $extern = $this->tinydb_access_manager->get_extern($key);
+            if (!isset($this->tinydb_extern_cache[$key])) {
+                $class = $extern['class'];
+                $this->tinydb_extern_cache[$key] = $class::one($this->$extern['name']);
+            }
+            return $this->tinydb_extern_cache[$key];
         }
-
-        return \TinyDb\Internal\SqlDataAdapters::decode(static::tinydb_get_table_info()->field_info($key)->type,
-                                                        $this->tinydb_rowdata[$key]);
     }
 
     public function __set($key, $value)
     {
         $this->tinydb_check_deleted();
 
-        $visibility = $this->tinydb_access_manager->get_publicity($key);
-        $current_scope = $this->tinydb_get_calling_scope();
-        if ($current_scope < $visibility || !static::tinydb_get_table_info()->field_info($key)) {
-            throw new \TinyDb\AccessException('Could not access ' . $key);
+        if ($this->tinydb_getset_is_method("set_$key")) {
+            $method_name = "set_$key";
+            $this->$method_name($value);
+        } else if ($this->tinydb_getset_is_table_field($key)) {
+            // Update modified_at time if it exists
+            if (static::tinydb_get_table_info()->field_info('modified_at') !== null) {
+                $this->tinydb_rowdata['modified_at'] =
+                            \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info('modified_at')->type,
+                                                                     time());
+            }
+
+            // Update the value
+            $value = \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info($key)->type, $value);
+            $this->tinydb_rowdata[$key] = $value;
+            $this->tinydb_invalidate($key);
+        } else if ($this->tinydb_getset_is_foreign($key)) {
+            $extern = $this->tinydb_access_manager->get_extern($key);
+            unset($this->tinydb_extern_cache[$key]);
+            $this->$extern['name'] = $value->id;
         }
-
-        if (static::tinydb_get_table_info()->field_info('modified_at') !== null) {
-            $this->tinydb_rowdata['modified_at'] =
-                        \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info('modified_at')->type, time());
-        }
-
-
-        $value = \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info($key)->type, $value);
-        $this->tinydb_rowdata[$key] = $value;
-        $this->tinydb_invalidate($key);
     }
 
     /**
@@ -101,6 +127,21 @@ abstract class Orm
         $this->tinydb_is_deleted = true;
     }
 
+    public function get_id()
+    {
+        $pkey = static::tinydb_get_table_info()->primary_key;
+        if (is_array($pkey)) {
+            $val = array();
+            foreach ($pkey as $field) {
+                $val[$field] = $this->$field;
+            }
+        } else {
+            $val = $this->$pkey;
+        }
+
+        return $val;
+    }
+
     /* # Object instantiation logic */
 
     /**
@@ -115,7 +156,7 @@ abstract class Orm
                     $values[$field] = $data[$field];
                 } else if ($field === 'created_at' || $field === 'modified_at') {
                     $values[$field] = time();
-                } else if (!$info->nullable) {
+                } else if (!$info->nullable && !$info->auto_increment) {
                     throw new \InvalidArgumentException($field . ' is required when creating this object.');
                 }
 
@@ -133,12 +174,15 @@ abstract class Orm
                 foreach (static::tinydb_get_table_info()->primary_key as $field) {
                     $id[$field] = $data[$field];
                 }
+            // If the primary key was provided, use that
+            } else if (isset($values[static::tinydb_get_table_info()->primary_key])) {
+                $id = $values[static::tinydb_get_table_info()->primary_key];
             }
 
             $query = \TinyDb\Query::create()->select('*')->from(static::$table_name);
             $query = static::tinydb_add_where_for_pkey($id, $query);
-            $row = $query->exec()[0];
-            $this->tinydb_datafill($row);
+            $rows = $query->exec();
+            $this->tinydb_datafill($rows[0]);
     }
 
     /**
@@ -166,17 +210,7 @@ abstract class Orm
      */
     private function tinydb_add_where($query)
     {
-        $pkey = static::tinydb_get_table_info()->primary_key;
-        if (is_array($pkey)) {
-            $val = array();
-            foreach ($pkey as $field) {
-                $val[$field] = $this->$field;
-            }
-        } else {
-            $val = $this->$pkey;
-        }
-
-        return static::tinydb_add_where_for_pkey($val, $query);
+        return static::tinydb_add_where_for_pkey($this->get_id(), $query);
     }
 
     /**
@@ -236,15 +270,72 @@ abstract class Orm
         $this->tinydb_needing_update[] = $key;
     }
 
+    /**
+     * Checks if the given key is a foreign key relation
+     * @param  string $name Key name
+     * @return boolean      True if the field is a foreign key relation, false otherwise
+     */
+    private function tinydb_getset_is_foreign($name)
+    {
+        return $this->tinydb_access_manager->get_extern($name) !== null;
+    }
+
+    /**
+     * Checks if the given key is a getter/setter method. Throws an exception if it's a method which isn't accessible from the calling scope
+     * @param  string $name Function name
+     * @return boolean      True if the field is a getter/setter, false otherwise.
+     */
+    private function tinydb_getset_is_method($name)
+    {
+        if ($this->tinydb_get_reflector()->hasMethod($name)) {
+            $method = $this->tinydb_get_reflector()->getMethod($name);
+
+            $current_scope = $this->tinydb_get_calling_scope(1);
+            $visibility = T_PUBLIC;
+            if ($method->isProtected()) {
+                $visibility = T_PROTECTED;
+            } else if ($method->isPrivate()) {
+                $visibility = T_PRIVATE;
+            }
+
+            if ($current_scope < $visibility) {
+                throw new \TinyDb\AccessException('Could not access ' . $key);
+            }
+
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if the given key is a table field. Throws an exception if it's a table field which isn't accessible from the calling scope.
+     * @param  string $field Field name
+     * @return boolean       True if the field is in the table, false otherwise.
+     */
+    private function tinydb_getset_is_table_field($field)
+    {
+        if (static::tinydb_get_table_info()->field_info($field) !== null) {
+            $visibility = $this->tinydb_access_manager->get_publicity($field);
+            $current_scope = $this->tinydb_get_calling_scope(1);
+            if ($current_scope < $visibility) {
+                throw new \TinyDb\AccessException('Could not access ' . $field);
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     /* ## Misc */
 
     /**
      * Gets the scope of the calling class relative to the current class.
      * @return int Visibility of the calling class into methods in this class. One of T_PUBLIC, T_PROTECTED, or T_PRIVATE.
      */
-    private function tinydb_get_calling_scope()
+    private function tinydb_get_calling_scope($stack_modifier = 0)
     {
-        $class_name = debug_backtrace(null, 3)[2]['class'];
+        $class_name = debug_backtrace(null, 3 + $stack_modifier)[2 + $stack_modifier]['class'];
         $current_class_name = get_class($this);
         if ($class_name === $current_class_name) {
             return T_PRIVATE;
