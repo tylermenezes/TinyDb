@@ -27,6 +27,10 @@ class OrmTest extends PHPUnit_Framework_TestCase
             ),
             'xyz' => array(
                 'type' => 'int'
+            ),
+            'defaultf' => array(
+                'type' => 'varchar(255)',
+                'default' => 'g'
             )
         ));
         \TinyDb\Query::create_table('OrmTestExtern', array(
@@ -39,6 +43,45 @@ class OrmTest extends PHPUnit_Framework_TestCase
                 'type' => 'varchar(255)'
             )
         ));
+    }
+
+    public function testMagicCreate()
+    {
+        $user = new OrmTestClass(array(
+            'username' => 'tylermenezes',
+            'password' => 'Hunter5',
+            'foobar' => 'foo',
+            'xyz' => 10,
+            'defaultf' => 'x'
+        ));
+        $this->assertEquals('foox', $user->defaultf);
+        $user->delete();
+    }
+
+    public function testDefault()
+    {
+        $user = new OrmTestClass(array(
+            'username' => 'tylermenezes',
+            'password' => 'Hunter5',
+            'foobar' => 'foo',
+            'xyz' => 10
+        ));
+        $this->assertEquals('g', $user->defaultf);
+        $user->delete();
+    }
+
+    public function testNonExistantParam()
+    {
+        $user = new OrmTestClass(array(
+            'username' => 'tylermenezes',
+            'password' => 'Hunter5',
+            'foobar' => 'foo',
+            'xyz' => 10
+        ));
+        $this->assertEquals(null, $user->new_param);
+        $user->new_param = true;
+        $this->assertEquals(true, $user->new_param);
+        $user->delete();
     }
 
     public function testCreate()
@@ -185,6 +228,7 @@ class OrmTestClass extends \TinyDb\Orm
     protected $password;
     public $foobar;
     public $xyz;
+    public $defaultf;
 
     /**
      * External thing
@@ -193,6 +237,11 @@ class OrmTestClass extends \TinyDb\Orm
     public $externID;
 
     public $ggg = false;
+
+    public function create_defaultf($val)
+    {
+        return "foo" . $val;
+    }
 
     public function get_bar()
     {

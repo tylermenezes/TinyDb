@@ -120,11 +120,25 @@ These fields will be automatically filled if a field of the type `datetime` exis
 
 Properties
 ----------
-TinyDb supports properties. To create one, define one or both of the magic methods (replacing
-propertyName with the name of the property):
+TinyDb supports properties. To create one, define one or both of the magic methods (replacing propertyName with the name of the property):
 
  * `get_propertyName()`
  * `set_propertyName($val)`
+
+If you need to modify a value when the object is being created, you can create a `create_propertyName($val)` function, which returns the
+modified value, e.g.:
+
+    public function create_password($val)
+    {
+        $salt = hash('whirlpool', mt_rand(0, mt_getrandmax()) . time());
+        $hash = hash('whirlpool', $val . '$' . $salt);
+        return implode('$', array('whirlpool', $hash, $salt));
+    }
+    public function set_password($val)
+    {
+        $this->password = $this->create_password($val);
+    }
+
 
 Foreign Keys
 ------------

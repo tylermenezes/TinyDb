@@ -60,12 +60,12 @@ abstract class Orm
     {
         $this->tinydb_check_deleted();
 
-        if ($this->tinydb_getset_is_method("get_$key")) {
-            $method_name = "get_$key";
-            return $this->$method_name();
-        } else if ($this->tinydb_getset_is_table_field($key)) {
+        if ($this->tinydb_getset_is_table_field($key)) {
             return \TinyDb\Internal\SqlDataAdapters::decode(static::tinydb_get_table_info()->field_info($key)->type,
                                                             $this->tinydb_rowdata[$key]);
+        } else if ($this->tinydb_getset_is_method("get_$key")) {
+            $method_name = "get_$key";
+            return $this->$method_name();
         } else if ($this->tinydb_getset_is_foreign($key)) {
             $extern = $this->tinydb_access_manager->get_extern($key);
             if (!isset($this->tinydb_extern_cache[$key])) {
@@ -80,10 +80,7 @@ abstract class Orm
     {
         $this->tinydb_check_deleted();
 
-        if ($this->tinydb_getset_is_method("set_$key")) {
-            $method_name = "set_$key";
-            $this->$method_name($value);
-        } else if ($this->tinydb_getset_is_table_field($key)) {
+        if ($this->tinydb_getset_is_table_field($key)) {
             // Update modified_at time if it exists
             if (static::tinydb_get_table_info()->field_info('modified_at') !== null) {
                 $this->tinydb_rowdata['modified_at'] =
@@ -95,11 +92,27 @@ abstract class Orm
             $value = \TinyDb\Internal\SqlDataAdapters::encode(static::tinydb_get_table_info()->field_info($key)->type, $value);
             $this->tinydb_rowdata[$key] = $value;
             $this->tinydb_invalidate($key);
+        } else if ($this->tinydb_getset_is_method("set_$key")) {
+            $method_name = "set_$key";
+            $this->$method_name($value);
         } else if ($this->tinydb_getset_is_foreign($key)) {
             $extern = $this->tinydb_access_manager->get_extern($key);
             unset($this->tinydb_extern_cache[$key]);
             $this->$extern['name'] = $value->id;
+        } else {
+            $this->$key = $value;
         }
+    }
+
+    /**
+     * Magic PHP function for checking if a parameter is set
+     * @param  string  $key Name of the parameter
+     * @return boolean      True if the parameter is set, false otherwise
+     */
+    public function __isset($key)
+    {
+        return ($this->tinydb_getset_is_table_field($key) || $this->tinydb_getset_is_method("get_$key") ||
+                $this->tinydb_getset_is_foreign($key));
     }
 
     /**
@@ -107,7 +120,7 @@ abstract class Orm
      */
     public function update()
     {
-        if (!$this->tinydb_is_deleted) {
+        if (!$this->tinydb_is_deleted && count($this->tinydb_needing_update) > 0) {
             $query = $this->tinydb_add_where(\TinyDb\Query::create()->update(static::$table_name));
             foreach ($this->tinydb_needing_update as $field)
             {
@@ -153,15 +166,20 @@ abstract class Orm
      * Creates the object in the database and populates the object data.
      * @param  array  $data Associative array of data to fill the object with
      */
-    private function tinydb_create($data)
+    protected function tinydb_create($data)
     {
             $values = array();
             foreach (static::tinydb_get_table_info()->table_info() as $field => $info) {
                 if (isset($data[$field])) {
-                    $values[$field] = $data[$field];
+                    if ($this->tinydb_getset_is_method("create_$field")) {
+                        $method_name = "create_$field";
+                        $values[$field] = $this->$method_name($data[$field]);
+                    } else {
+                        $values[$field] = $data[$field];
+                    }
                 } else if ($field === 'created_at' || $field === 'modified_at') {
                     $values[$field] = time();
-                } else if (!$info->nullable && !$info->auto_increment) {
+                } else if (!$info->nullable && !$info->auto_increment && !isset($info->default)) {
                     throw new \InvalidArgumentException($field . ' is required when creating this object.');
                 }
 
@@ -304,7 +322,7 @@ abstract class Orm
             }
 
             if ($current_scope < $visibility) {
-                throw new \TinyDb\AccessException('Could not access ' . $key);
+                return false;
             }
 
             return true;
@@ -324,7 +342,7 @@ abstract class Orm
             $visibility = $this->tinydb_access_manager->get_publicity($field);
             $current_scope = $this->tinydb_get_calling_scope(1);
             if ($current_scope < $visibility) {
-                throw new \TinyDb\AccessException('Could not access ' . $field);
+                return false;
             }
             return true;
         } else {

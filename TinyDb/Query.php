@@ -131,6 +131,10 @@ class Query
         $sql = 'CREATE TABLE `' . $name . '` (' . "\n";
         $keys = array();
         foreach ($fields as $k => $info) {
+            if (!isset($info['type'])) {
+                throw new \InvalidArgumentException('type is required for creating tables');
+            }
+
             $sql .= "\t$k ";
             $sql .= $info['type'];
             if (isset($info['null']) && $info['null']) {
@@ -141,6 +145,10 @@ class Query
 
             if (isset($info['auto_increment']) && $info['auto_increment']) {
                 $sql .= ' AUTO_INCREMENT';
+            }
+
+            if (isset($info['default'])) {
+                $sql .= ' DEFAULT "' . str_replace('"', '\\"', $info['default']) . '"';
             }
 
             if (isset($info['key']) && $info['key']) {

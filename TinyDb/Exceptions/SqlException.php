@@ -17,6 +17,7 @@ class SqlException extends \Exception
             $message .= "Parameters for replacement were: \n";
             $message .= $this->paramaters;
         }
+        return $message;
     }
 
     public function __construct($message, $debug, $sql, $paramaters = null)
