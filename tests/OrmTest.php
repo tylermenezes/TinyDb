@@ -45,6 +45,45 @@ class OrmTest extends PHPUnit_Framework_TestCase
         ));
     }
 
+    public function testEquals()
+    {
+
+        $user = new OrmTestClass(array(
+            'username' => 'tylermenezes',
+            'password' => 'Hunter5',
+            'foobar' => 'foo',
+            'xyz' => 10
+        ));
+        $user2 = OrmTestClass::find($user->id);
+        $user3 = new OrmTestClass(array(
+            'username' => 'tylermenezes2',
+            'password' => 'Hunter5',
+            'foobar' => 'foo',
+            'xyz' => 10
+        ));
+
+        $this->assertEquals(true, $user->equals($user2));
+        $this->assertEquals(false, $user->equals($user3));
+
+        $user->delete();
+        $user3->delete();
+    }
+
+    public function testJson()
+    {
+        $user = new OrmTestClass(array(
+            'username' => 'tylermenezes',
+            'password' => 'Hunter5',
+            'foobar' => 'foo',
+            'xyz' => 10
+        ));
+
+        $this->assertEquals('{"bar":"bar","defaultf":"g","externID":0,"foobar":["foo"],"ggg":false,"table_name":null,"username":"tylermenezes","xyz":10}', json_encode($user));
+        $this->assertEquals(json_encode($user), $user->json);
+
+        $user->delete();
+    }
+
     public function testMagicCreate()
     {
         $user = new OrmTestClass(array(

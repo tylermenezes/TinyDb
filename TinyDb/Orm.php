@@ -10,7 +10,7 @@ require_once(dirname(__FILE__) . '/Internal/require.php');
  * @author      Tyler Menezes <tylermenezes@gmail.com>
  * @copyright   Copyright (c) 2012-2013 Tyler Menezes.       Released under the BSD license.
  */
-abstract class Orm
+abstract class Orm implements \JsonSerializable
 {
     public static $table_name = null;
 
@@ -18,6 +18,7 @@ abstract class Orm
     private $tinydb_is_deleted = false;
     private $tinydb_access_manager = null;
     private $tinydb_rowdata = null;
+    private $tinydb_defined_methods = array('get_id', 'get_json', 'equals', 'update', 'delete');
 
     public function __construct($new_data_or_datafill)
     {
@@ -46,6 +47,11 @@ abstract class Orm
         }
     }
 
+    /**
+     * Gets a single instance of the model given the primary key
+     * @param  mixed  $pkey Primary key to lookup by
+     * @return self         Returned object
+     */
     public static function one($pkey)
     {
         if (count(func_get_args()) > 1) {
@@ -55,7 +61,16 @@ abstract class Orm
         return static::tinydb_add_where_for_pkey($pkey, new \TinyDb\Internal\Query\Model(get_called_class()))->one();
     }
 
+    /**
+     * Used for storing foreign key lookups which have already been done
+     * @var array
+     */
     private $tinydb_extern_cache = array();
+    /**
+     * PHP magic getter
+     * @param  string $key Key to get
+     * @return mixed       Value of key
+     */
     public function __get($key)
     {
         $this->tinydb_check_deleted();
@@ -76,6 +91,11 @@ abstract class Orm
         }
     }
 
+    /**
+     * PHP magic setter
+     * @param string $key   Key to set
+     * @param mixed  $value Value to set key to
+     */
     public function __set($key, $value)
     {
         $this->tinydb_check_deleted();
@@ -145,6 +165,12 @@ abstract class Orm
         $this->tinydb_is_deleted = true;
     }
 
+    /* # Predefined magic getters */
+
+    /**
+     * Gets the object's primary key values. Magic getter for $obj->id
+     * @return mixed Primary key values; either a string or, for a composite primary key, an array
+     */
     public function get_id()
     {
         $pkey = static::tinydb_get_table_info()->primary_key;
@@ -158,6 +184,37 @@ abstract class Orm
         }
 
         return $val;
+    }
+
+    /**
+     * Gets a JSON representation of the object. Magic getter for $obj->json. Shortcut for json_encode($obj).
+     * @return string JSON representation of the object
+     */
+    public function get_json()
+    {
+        return json_encode($this);
+    }
+
+    /* # Interfaces */
+
+    /**
+     * Checks if the two classes are equal
+     * @param  static $to_compare Instance to test for equality
+     * @return boolean            True if the instances are equal, false otherwise
+     */
+    public function equals(self $to_compare)
+    {
+        $class = get_class($to_compare);
+        return ($class::$table_name === static::$table_name) && ($this->id === $to_compare->id);
+    }
+
+    /**
+     * Returns a version of the object which is JSON-serializable
+     * @return object JSON-serializable object
+     */
+    public function jsonSerialize()
+    {
+        return $this->tinydb_get_serializable_data();
     }
 
     /* # Object instantiation logic */
@@ -351,6 +408,42 @@ abstract class Orm
     }
 
     /* ## Misc */
+
+    /**
+     * Gets a serializeable representation of the object
+     * @return object Object containing all serializable properties of the object
+     */
+    private function tinydb_get_serializable_data()
+    {
+        $serializable_array = array();
+
+        // Add database data
+        foreach ($this->tinydb_rowdata as $field => $val) {
+            if ($this->tinydb_access_manager->get_publicity($field) === T_PUBLIC) {
+                $serializable_array[$field] = $val;
+            }
+        }
+
+        // Add other misc object data
+        foreach ($this->tinydb_get_reflector()->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+            $k = $prop->getName();
+            $v = $this->$k;
+            $serializable_array[$k] = $v;
+        }
+
+        // Add data from magic getters and setters
+        foreach ($this->tinydb_get_reflector()->getMethods(\ReflectionProperty::IS_PUBLIC) as $meth) {
+            $name = $meth->getName();
+            if (preg_match('/^get_[a-zA-Z_\x7f-\xff][a-zA-Z0-9_\x7f-\xff]*$/D', $name) && !in_array($name, $this->tinydb_defined_methods)) {
+                $serializable_array[substr($name, 4)] = $this->$name();
+            }
+        }
+
+        ksort($serializable_array);
+
+        return $serializable_array;
+        return (object)$serializable_array;
+    }
 
     /**
      * Gets the scope of the calling class relative to the current class.
