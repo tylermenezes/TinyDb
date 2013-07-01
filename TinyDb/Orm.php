@@ -177,11 +177,14 @@ abstract class Orm implements \JsonSerializable
         if (is_array($pkey)) {
             $val = array();
             foreach ($pkey as $field) {
-                $val[$field] = $this->$field;
+                $val[$field] = \TinyDb\Internal\SqlDataAdapters::decode(static::tinydb_get_table_info()->field_info($field)->type,
+                    $this->tinydb_rowdata[$field]);
             }
         } else {
-            $val = $this->$pkey;
+            $val = \TinyDb\Internal\SqlDataAdapters::decode(static::tinydb_get_table_info()->field_info($pkey)->type,
+                    $this->tinydb_rowdata[$pkey]);
         }
+
 
         return $val;
     }
@@ -228,7 +231,7 @@ abstract class Orm implements \JsonSerializable
             $values = array();
             foreach (static::tinydb_get_table_info()->table_info() as $field => $info) {
                 if (isset($data[$field])) {
-                    if ($this->tinydb_getset_is_method("create_$field")) {
+                    if ($this->tinydb_getset_is_method("create_$field", true)) {
                         $method_name = "create_$field";
                         $values[$field] = $this->$method_name($data[$field]);
                     } else {
@@ -365,7 +368,7 @@ abstract class Orm implements \JsonSerializable
      * @param  string $name Function name
      * @return boolean      True if the field is a getter/setter, false otherwise.
      */
-    private function tinydb_getset_is_method($name)
+    private function tinydb_getset_is_method($name, $no_visibility_check = false)
     {
         if ($this->tinydb_get_reflector()->hasMethod($name)) {
             $method = $this->tinydb_get_reflector()->getMethod($name);
@@ -378,7 +381,7 @@ abstract class Orm implements \JsonSerializable
                 $visibility = T_PRIVATE;
             }
 
-            if ($current_scope < $visibility) {
+            if (!$no_visibility_check && $current_scope < $visibility) {
                 return false;
             }
 

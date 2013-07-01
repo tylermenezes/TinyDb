@@ -19,11 +19,13 @@ class SqlDataAdapters
      */
     public static function encode($column_type, $val)
     {
+        $column_type = strtolower($column_type);
         switch ($column_type) {
             // The truthy types!
             case 'bit':
             case 'bool':
-                return $val == true;
+            case 'boolean':
+                return $val == true ? 1 : 0;
 
             // The temporal types:
             case 'date':
@@ -92,10 +94,16 @@ class SqlDataAdapters
      */
     public static function decode($column_type, $val)
     {
+        if ($val === null) {
+            return null;
+        }
+
         switch ($column_type) {
             // A few specific overrides...
             case 'bit':
             case 'bool':
+            case 'boolean':
+            case 'tinyint':
                 return $val == 1;
 
             case 'date':

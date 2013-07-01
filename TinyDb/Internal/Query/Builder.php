@@ -201,7 +201,7 @@ class Builder
         $vals = array();
         foreach ($in_vals as $val) {
             if (is_string($val)) {
-                $vals[] = "'" . $val . "'";
+                $vals[] = "'" . mysql_real_escape_string($val) . "'";
             } else {
                 $vals[] = $val;
             }
@@ -476,7 +476,7 @@ class Builder
             foreach ($this->sets as $field=>$value) {
                 if ($first) {
                     $sql .= "\tSET ";
-                    $first = true;
+                    $first = false;
                 } else {
                     $sql .= "\n\t    ";
                 }

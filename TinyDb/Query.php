@@ -1,6 +1,9 @@
 <?php
 
 namespace TinyDb;
+use TinyDb\Internal;
+use TinyDb\Internal\SqlDataAdapters;
+
 require_once(dirname(__FILE__) . '/Internal/require.php');
 
 
@@ -120,6 +123,17 @@ class Query
     }
 
     /**
+     * Checks if a table exists
+     *
+     * @param string $name The table to check for existence.
+     * @return bool
+     */
+    public static function table_exists($name)
+    {
+        return in_array($name, self::show_tables());
+    }
+
+    /**
      * Creates a table.
      * @param  string $name   Table name
      * @param  array  $fields List of fields; an array of fieldname: [type:string, null:boolean, key:string]
@@ -148,7 +162,13 @@ class Query
             }
 
             if (isset($info['default'])) {
-                $sql .= ' DEFAULT "' . str_replace('"', '\\"', $info['default']) . '"';
+                $type = (strpos($info['type'], '(') !== false ? substr($info['type'], 0, strpos($info['type'], '(')) : $info['type']);
+                $default = Internal\SqlDataAdapters::encode($type, $info['default']);
+                if (is_string($default)) {
+                    $default = '"' . str_replace('"', '\\"', $info['default']) . '"';
+                }
+
+                $sql .= ' DEFAULT ' . $default;
             }
 
             if (isset($info['key']) && $info['key']) {
@@ -204,8 +224,7 @@ class Query
         $describe = Db::get_read()->getAll($sql, null, array(), null, MDB2_FETCHMODE_ASSOC);
 
         if (\PEAR::isError($describe)) {
-            throw new SqlException($describe->getMessage(), $describe->getDebugInfo(), $describe->get_sql(),
-                                   $describe->get_paramaters());
+            throw new SqlException($describe->getMessage(), $describe->getDebugInfo(), '', $sql);
         }
 
         $fields = array();

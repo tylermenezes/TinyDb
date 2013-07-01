@@ -18,8 +18,18 @@ class Model
     public function one()
     {
         $data = $this->query->limit(1)->exec(false);
+
+        if (count($data) === 0) {
+            throw new \TinyDb\NoRecordException();
+        }
+
         $class = $this->class;
         return new $class($data[0]);
+    }
+
+    public function exists()
+    {
+        return count($this->query->limit(1)->exec(false)) > 0;
     }
 
     public function all()
