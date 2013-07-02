@@ -319,7 +319,7 @@ abstract class Orm implements \JsonSerializable
                         throw new \InvalidArgumentException($field . ' is part of the primary key but was not provided.');
                     }
 
-                    $query = $query->where('`' . $pkey[$i] . '` = ?', $provided_key[$field]);
+                    $query = $query->where('`' . $field . '` = ?', $provided_key[$field]);
                 }
             } else {
                 for ($i = 0; $i < count($pkey); $i++) {
