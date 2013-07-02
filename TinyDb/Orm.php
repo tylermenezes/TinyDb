@@ -85,7 +85,11 @@ abstract class Orm implements \JsonSerializable
             $extern = $this->tinydb_access_manager->get_extern($key);
             if (!isset($this->tinydb_extern_cache[$key])) {
                 $class = $extern['class'];
-                $this->tinydb_extern_cache[$key] = $class::one($this->$extern['name']);
+                if ($this->$extern['name']) {
+                    $this->tinydb_extern_cache[$key] = $class::one($this->$extern['name']);
+                } else {
+                    $this->tinydb_extern_cache[$key] = null;
+                }
             }
             return $this->tinydb_extern_cache[$key];
         }
