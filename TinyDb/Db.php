@@ -63,6 +63,7 @@ class Db
         foreach ($connection_strings as $connection_string) {
             $connection = \MDB2::connect($connection_string);
 
+
             if (\PEAR::isError($connection)) {
                 throw new ConnectionException($connection->getMessage() . ',' . $connection->getDebugInfo());
             }
@@ -72,6 +73,9 @@ class Db
 
             // Enable case-sensitivity
             $connection->setOption('portability', MDB2_PORTABILITY_ALL & ~MDB2_PORTABILITY_FIX_CASE);
+
+            // Set timezone to UTC
+            $connection->getOne("SET time_zone = '+00:00';", null, null, null, MDB2_FETCHMODE_ASSOC);
 
             $connections[] = $connection;
         }
